@@ -1612,7 +1612,7 @@ public class NetworkInformation             //информация о конкр
     public int NumberOfTransformators;        //трансформаторов
 
     public EParams eParamsInNetwork = new EParams();       //параметрах конкретно этого блока в этой цепи
-    internal float current;
+    public float current;
 }
 
 /// <summary>
