@@ -56,5 +56,9 @@
         <LastGenOutput>Resources.Designer.cs</LastGenOutput>
       </EmbeddedResource>
     </ItemGroup>
+    <ItemGroup>
+      <Folder Include="assets\" />
+      <Folder Include="Content\Block\" />
+    </ItemGroup>
     <ProjectExtensions><VisualStudio><UserProperties /></VisualStudio></ProjectExtensions>
 </Project>

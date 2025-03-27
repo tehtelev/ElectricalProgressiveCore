@@ -1,30 +1,13 @@
-﻿using ElectricalProgressive.Content.Block.EAccumulator;
-using ElectricalProgressive.Content.Block.ECharger;
-using ElectricalProgressive.Content.Block.EConnector;
-using ElectricalProgressive.Content.Block.EFreezer;
-using ElectricalProgressive.Content.Block.EGenerator;
-using ElectricalProgressive.Content.Block.EHorn;
-using ElectricalProgressive.Content.Block.EMotor;
-using ElectricalProgressive.Content.Block.EStove;
-using ElectricalProgressive.Content.Block.ELamp;
-using ElectricalProgressive.Content.Block.EOven;
-using Vintagestory.API.Common;
+﻿using Vintagestory.API.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using ElectricalProgressive.Content.Block;
-using ElectricalProgressive.Content.Block.ESwitch;
 using ElectricalProgressive.Interface;
 using ElectricalProgressive.Utils;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Client;
 using Vintagestory.API.Util;
-using ElectricalProgressive.Content.Block.ECable;
-using ElectricalProgressive.Content.Block.ETransformator;
-using ElectricalProgressive.Content.Block.EHeater;
-using ElectricalProgressive.Content.Item.Armor;
-using ElectricalProgressive.Content.Item.Tool;
-using ElectricalProgressive.Content.Item.Weapon;
+
 
 
 
@@ -34,7 +17,7 @@ using ElectricalProgressive.Content.Item.Weapon;
     "electricalprogressivecore",
     Website = "https://git",
     Description = "Brings electricity into the game!",
-    Version = "0.0.1",
+    Version = "0.9.0",
     Authors = new[] {
         "Tehtelev",
         "Kotl"
@@ -64,15 +47,7 @@ public class ElectricalProgressive : ModSystem
     private ICoreClientAPI capi = null!;
 
 
-    private readonly string[] _targetFiles =
-    {
-        "itemtypes/armor/static-armor.json",
-        "itemtypes/armor/static-boots.json",
-        "itemtypes/armor/static-helmet.json"
-    };
-
     private ElectricityConfig config;
-
 
 
     public override void Start(ICoreAPI api)
@@ -81,85 +56,11 @@ public class ElectricalProgressive : ModSystem
 
         this.api = api;
 
-        api.RegisterBlockClass("BlockECable", typeof(BlockECable));
-        api.RegisterBlockEntityClass("BlockEntityECable", typeof(BlockEntityECable));
-
-        api.RegisterBlockClass("BlockESwitch", typeof(BlockESwitch));
-
-        api.RegisterBlockClass("BlockEHorn", typeof(BlockEHorn));
-        api.RegisterBlockEntityBehaviorClass("BEBehaviorEHorn", typeof(BEBehaviorEHorn));
-        api.RegisterBlockEntityClass("BlockEntityEHorn", typeof(BlockEntityEHorn));
-
-        api.RegisterBlockClass("BlockEAccumulator", typeof(BlockEAccumulator));
-        api.RegisterBlockEntityClass("BlockEntityEAccumulator", typeof(BlockEntityEAccumulator));
-        api.RegisterBlockEntityBehaviorClass("BEBehaviorEAccumulator", typeof(BEBehaviorEAccumulator));
-
-        api.RegisterBlockClass("BlockELamp", typeof(BlockELamp));
-        api.RegisterBlockClass("BlockESmallLamp", typeof(BlockESmallLamp));
-
-        api.RegisterBlockEntityClass("BlockEntityELamp", typeof(BlockEntityELamp));
-        api.RegisterBlockEntityBehaviorClass("BEBehaviorELamp", typeof(BEBehaviorELamp));
-
-        api.RegisterBlockClass("BlockEHeater", typeof(BlockEHeater));
-        api.RegisterBlockEntityClass("BlockEntityEHeater", typeof(BlockEntityEHeater));
-        api.RegisterBlockEntityBehaviorClass("BEBehaviorEHeater", typeof(BEBehaviorEHeater));
-
-        api.RegisterBlockClass("BlockConnector", typeof(BlockConnector));
-        api.RegisterBlockEntityClass("BlockEntityEConnector", typeof(BlockEntityEConnector));
-
-        api.RegisterBlockClass("BlockECharger", typeof(BlockECharger));
-        api.RegisterBlockEntityClass("BlockEntityECharger", typeof(BlockEntityECharger));
-        api.RegisterBlockEntityBehaviorClass("BEBehaviorECharger", typeof(BEBehaviorECharger));
-
-        api.RegisterBlockClass("BlockETransformator", typeof(BlockETransformator));
-        api.RegisterBlockEntityClass("BlockEntityETransformator", typeof(BlockEntityETransformator));
-        api.RegisterBlockEntityBehaviorClass("BEBehaviorETransformator", typeof(BEBehaviorETransformator));
-
-        api.RegisterBlockClass("BlockEStove", typeof(BlockEStove));
-        api.RegisterBlockEntityClass("BlockEntityEStove", typeof(BlockEntityEStove));
-        api.RegisterBlockEntityBehaviorClass("BEBehaviorEStove", typeof(BEBehaviorEStove));
-
-        api.RegisterBlockClass("BlockEFreezer", typeof(BlockEFreezer));
-        api.RegisterBlockEntityClass("BlockEntityEFreezer", typeof(BlockEntityEFreezer));
-        api.RegisterBlockEntityBehaviorClass("BEBehaviorEFreezer", typeof(BEBehaviorEFreezer));
-
-        api.RegisterBlockClass("BlockEOven", typeof(BlockEOven));
-        api.RegisterBlockEntityClass("BlockEntityEOven", typeof(BlockEntityEOven));
-        api.RegisterBlockEntityBehaviorClass("BEBehaviorEOven", typeof(BEBehaviorEOven));
-
-        api.RegisterBlockClass("BlockEMotor", typeof(BlockEMotor));
-        api.RegisterBlockEntityClass("BlockEntityEMotor", typeof(BlockEntityEMotor));
-        api.RegisterBlockEntityBehaviorClass("BEBehaviorEMotorTier1", typeof(BEBehaviorEMotorTier1));
-        api.RegisterBlockEntityBehaviorClass("BEBehaviorEMotorTier2", typeof(BEBehaviorEMotorTier2));
-        api.RegisterBlockEntityBehaviorClass("BEBehaviorEMotorTier3", typeof(BEBehaviorEMotorTier3));
-
-        api.RegisterBlockClass("BlockEGenerator", typeof(BlockEGenerator));
-        api.RegisterBlockEntityClass("BlockEntityEGenerator", typeof(BlockEntityEGenerator));
-        api.RegisterBlockEntityBehaviorClass("BEBehaviorEGeneratorTier1", typeof(BEBehaviorEGeneratorTier1));
-        api.RegisterBlockEntityBehaviorClass("BEBehaviorEGeneratorTier2", typeof(BEBehaviorEGeneratorTier2));
-        api.RegisterBlockEntityBehaviorClass("BEBehaviorEGeneratorTier3", typeof(BEBehaviorEGeneratorTier3));
-
-        api.RegisterBlockEntityBehaviorClass("ElectricityAddon", typeof(BEBehaviorElectricalProgressive));
-
-        api.RegisterItemClass("EChisel", typeof(EChisel));
-        api.RegisterItemClass("EAxe", typeof(EAxe));
-        api.RegisterItemClass("EDrill", typeof(EDrill));
-        api.RegisterItemClass("EArmor", typeof(EArmor));
-        api.RegisterItemClass("EWeapon", typeof(EWeapon));
-        api.RegisterItemClass("EShield", typeof(EShield));
-
         api.Event.RegisterGameTickListener(this.OnGameTick, 500);
 
         if (api.ModLoader.IsModEnabled("combatoverhaul"))
             combatoverhaul = true;
 
-
-        //патч бронм для CO
-        if (combatoverhaul)
-        {
-            var processor = new ArmorAssetProcessor(api);
-            processor.ProcessAssets("electricityaddon", _targetFiles);
-        }
 
 
         // Загрузка или создание конфигурации
@@ -171,6 +72,11 @@ public class ElectricalProgressive : ModSystem
         }
 
         // Загрузка конфигурации
+        if (config.speedOfElectricity>16)
+            config.speedOfElectricity = 16;
+        if (config.speedOfElectricity < 1)
+            config.speedOfElectricity = 1;
+
         speedOfElectricity = config.speedOfElectricity;
         instant = config.instant;
     }
@@ -190,7 +96,7 @@ public class ElectricalProgressive : ModSystem
 
 
     /// <summary>
-    /// Отслеживает заэатую кнопку Alt
+    /// Отслеживает зажатую кнопку Alt
     /// </summary>
     /// <param name="comb"></param>
     /// <returns></returns>
