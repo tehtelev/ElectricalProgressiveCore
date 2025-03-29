@@ -13,7 +13,7 @@ using Vintagestory.API.Util;
 
 [assembly: ModDependency("game", "1.20.0")]
 [assembly: ModInfo(
-    "ElectricalProgressiveCore",
+    "Electrical Progressive: Core",
     "electricalprogressivecore",
     Website = "https://git",
     Description = "Brings electricity into the game!",

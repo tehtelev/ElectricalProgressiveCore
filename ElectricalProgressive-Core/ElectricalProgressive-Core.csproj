@@ -41,7 +41,9 @@
         </Content>
     </ItemGroup>
     <ItemGroup>
-      <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+      <PackageReference Include="Newtonsoft.Json" Version="13.0.3">
+        <IsPackable>false</IsPackable>
+      </PackageReference>      
     </ItemGroup>
     <ItemGroup>
       <Compile Update="Properties\Resources.Designer.cs">
