@@ -15,7 +15,7 @@ using Vintagestory.API.Util;
 [assembly: ModInfo(
     "Electrical Progressive: Core",
     "electricalprogressivecore",
-    Website = "https://git",
+    Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Brings electricity into the game!",
     Version = "0.9.0",
     Authors = new[] {
