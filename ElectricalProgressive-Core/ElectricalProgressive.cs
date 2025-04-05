@@ -19,7 +19,7 @@ using Vintagestory.API.Config;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Brings electricity into the game!",
-    Version = "0.9.2",
+    Version = "0.9.3",
     Authors = new[] {
         "Tehtelev",
         "Kotl"
@@ -203,7 +203,7 @@ public class ElectricalProgressive : ModSystem
                     foreach (var ams in this.parts[pos].eparams)
                     {
 
-                        if (ams.Equals(default(EParams)))
+                        if (ams.Equals(new EParams()))
                             this.parts[pos].eparams[i] = new EParams();
 
                         i++;
@@ -211,7 +211,7 @@ public class ElectricalProgressive : ModSystem
 
                 }
                 else
-                    this.parts[pos].eparams = new EParams[6]
+                    this.parts[pos].eparams = new EParams[]
                         {
                         new EParams(),
                         new EParams(),
@@ -1066,7 +1066,7 @@ public class ElectricalProgressive : ModSystem
         {
             if (this.parts.TryGetValue(position, out var part))                 //есть такое соединение?
             {
-                this.AddConnections(ref part, part.Connection, (default, 0));     //добавляем соединения???
+                this.AddConnections(ref part, part.Connection, (new EParams(), 0));     //добавляем соединения???
             }
         }
     }
@@ -1199,17 +1199,25 @@ public class ElectricalProgressive : ModSystem
             int i = 0;
             if (part.eparams == null)
             {
-                part.eparams = new EParams[6];
+                part.eparams = new EParams[]
+                        {
+                        new EParams(),
+                        new EParams(),
+                        new EParams(),
+                        new EParams(),
+                        new EParams(),
+                        new EParams()
+                        };
             }
 
             foreach (var ams in part.eparams)
             {
-                if (ams.Equals(default))
+                if (ams.Equals(new EParams()))
                     part.eparams[i] = new EParams();
                 i++;
             }
 
-            if (!setEparams.Item1.Equals(default) && part.eparams[face.Index].maxCurrent == 0)
+            if (!setEparams.Item1.Equals(new EParams()) && part.eparams[face.Index].maxCurrent == 0)
                 part.eparams[face.Index] = setEparams.Item1;      //аналогично с параметрами электричества
         }
 
