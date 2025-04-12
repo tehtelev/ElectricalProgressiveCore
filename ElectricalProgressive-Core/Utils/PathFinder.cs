@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using Vintagestory.API.MathTools;
 
@@ -7,6 +8,11 @@ namespace ElectricalProgressive.Utils;
 
 public class PathFinder
 {
+
+
+
+
+
     /// <summary>
     /// Реализует обход в ширину для поиска кратчайшего пути
     /// </summary>
@@ -221,11 +227,11 @@ public class PathFinder
             // Перебираем все направления соединений
             foreach (BlockFacing direction in FacingHelper.Directions(connections))
             {
-                
+
 
                 int targetFaceIndex = direction.Index;
-                
-                if (!processFacesBuf[targetFaceIndex] && (hereConnections & FacingHelper.From(direction, currentFace))!=0)
+
+                if (!processFacesBuf[targetFaceIndex] && (hereConnections & FacingHelper.From(direction, currentFace)) != 0)
                 {
                     processFacesBuf[targetFaceIndex] = true;
                     queue.Enqueue(targetFaceIndex);
@@ -332,11 +338,14 @@ public class PathFinder
     /// <returns></returns>
     public bool ToGetNeighbor(BlockPos pos, Dictionary<BlockPos, NetworkPart> parts, int startFace, BlockPos nextPos)
     {
-        List<BlockPos> Neighbors = new List<BlockPos>();  //координата соседа
 
-        var part = parts[pos];                     //текущий элемент
+
+        if (!parts.TryGetValue(pos, out var part))       //текущий элемент
+            return false;
+
         var Connections = part.Connection;         //соединения этого элемента
 
+        bool[] processFacesBuf = new bool[6];
 
         Facing hereConnections = part.Connection;
 
@@ -346,7 +355,7 @@ public class PathFinder
         // Инициализация BFS
         var queue = new Queue<int>();
         queue.Enqueue(startFaceIndex);
-        bool[] processFacesBuf = new bool[6];
+
         processFacesBuf[startFaceIndex] = true;
 
         BlockFacing startBlockFacing = FacingHelper.BlockFacingFromIndex(startFaceIndex);
@@ -397,18 +406,18 @@ public class PathFinder
                 {
                     if ((neighborPart.Connection & FacingHelper.From(face, direction.Opposite)) != 0)
                     {
-
-                        if (parts.ContainsKey(neighborPosition))
+                        if (neighborPosition == nextPos)
                         {
-                            Neighbors.Add(neighborPosition);                //координата соседа
+                            return true;
                         }
+
                     }
 
                     if ((neighborPart.Connection & FacingHelper.From(direction.Opposite, face)) != 0)
                     {
-                        if (parts.ContainsKey(neighborPosition))
+                        if (neighborPosition == nextPos)
                         {
-                            Neighbors.Add(neighborPosition);                //координата соседа
+                            return true;
                         }
                     }
                 }
@@ -428,17 +437,17 @@ public class PathFinder
                 {
                     if ((neighborPart.Connection & FacingHelper.From(direction.Opposite, face.Opposite)) != 0)
                     {
-                        if (parts.ContainsKey(neighborPosition))
+                        if (neighborPosition == nextPos)
                         {
-                            Neighbors.Add(neighborPosition);                //координата соседа
+                            return true;
                         }
                     }
 
                     if ((neighborPart.Connection & FacingHelper.From(face.Opposite, direction.Opposite)) != 0)
                     {
-                        if (parts.ContainsKey(neighborPosition))
+                        if (neighborPosition == nextPos)
                         {
-                            Neighbors.Add(neighborPosition);                //координата соседа
+                            return true;
                         }
                     }
                 }
@@ -447,8 +456,8 @@ public class PathFinder
 
 
 
-        //возвращаем координаты соседей, котактирующую грань соседа, задействованные грани в этой точке сейчас, все обработанные грани этой цепи в этой точке 
-        return (Neighbors.Contains(nextPos));
+        
+        return false;
     }
 
 
