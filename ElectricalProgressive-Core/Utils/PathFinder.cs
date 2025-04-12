@@ -338,125 +338,60 @@ public class PathFinder
     /// <returns></returns>
     public bool ToGetNeighbor(BlockPos pos, Dictionary<BlockPos, NetworkPart> parts, int startFace, BlockPos nextPos)
     {
-
-
-        if (!parts.TryGetValue(pos, out var part))       //текущий элемент
+        if (!parts.TryGetValue(pos, out var part))
             return false;
 
-        var Connections = part.Connection;         //соединения этого элемента
+        var processedFaces = new bool[6];
+        var queue = new Queue<BlockFacing>();
+        var startFacing = FacingHelper.BlockFacingFromIndex(startFace);
 
-        bool[] processFacesBuf = new bool[6];
+        queue.Enqueue(startFacing);
+        processedFaces[startFace] = true;
 
-        Facing hereConnections = part.Connection;
+        // Проверка прямых соседей по граням
+        foreach (var direction in FacingHelper.Directions(part.Connection))
+        {
+            var neighborPos = pos.AddCopy(direction);
+            if (neighborPos == nextPos)
+                return true;
+        }
 
-        // нужно выяснить с какой гранью мы работаем и соединены ли грани одной цепи
-        int startFaceIndex = startFace;
+        // Проверка соседей по ребрам
+        foreach (var direction in FacingHelper.Directions(part.Connection))
+        {
+            foreach (var face in FacingHelper.Faces(part.Connection))
+            {
+                if (face == direction || face == direction.Opposite)
+                    continue;
 
-        // Инициализация BFS
-        var queue = new Queue<int>();
-        queue.Enqueue(startFaceIndex);
+                var neighborPos = pos.AddCopy(direction).AddCopy(face);
+                if (neighborPos == nextPos && parts.ContainsKey(neighborPos))
+                    return true;
+            }
+        }
 
-        processFacesBuf[startFaceIndex] = true;
-
-        BlockFacing startBlockFacing = FacingHelper.BlockFacingFromIndex(startFaceIndex);
-
-
-        // Поиск всех связанных граней
+        // BFS для поиска соединенных граней
         while (queue.Count > 0)
         {
-            int currentFaceIndex = queue.Dequeue();
-            BlockFacing currentFace = FacingHelper.BlockFacingFromIndex(currentFaceIndex);
+            var currentFacing = queue.Dequeue();
 
-            // Получаем соединения текущей грани
-            Facing currentFaceMask = FacingHelper.FromFace(currentFace);
-            Facing connections = hereConnections & currentFaceMask;
-
-            // Перебираем все направления соединений
-            foreach (BlockFacing direction in FacingHelper.Directions(connections))
+            // Проверка всех направлений соединений
+            foreach (var direction in FacingHelper.Directions(part.Connection))
             {
-                int targetFaceIndex = direction.Index;
-                if (!processFacesBuf[targetFaceIndex])
+                if (!processedFaces[direction.Index] &&
+                    (part.Connection & FacingHelper.FromFace(direction)) != 0)
                 {
-                    processFacesBuf[targetFaceIndex] = true;
-                    queue.Enqueue(targetFaceIndex);
+                    processedFaces[direction.Index] = true;
+                    queue.Enqueue(direction);
+
+                    // Прямая проверка позиции
+                    var testPos = pos.AddCopy(direction);
+                    if (testPos == nextPos)
+                        return true;
                 }
             }
         }
 
-
-        // Обновляем hereConnections, оставляя только связи найденных граней
-        Facing validConnectionsMask = processFacesBuf
-            .Select((processed, index) => processed ? FacingHelper.FromFace(FacingHelper.BlockFacingFromIndex(index)) : Facing.None)
-            .Aggregate(Facing.None, (mask, curr) => mask | curr);
-
-        hereConnections &= validConnectionsMask;
-
-
-
-
-        //ищем соседей по граням
-        foreach (var direction in FacingHelper.Directions(hereConnections))
-        {
-            var directionFilter = FacingHelper.FromDirection(direction);
-            var neighborPosition = part.Position.AddCopy(direction);
-
-            if (parts.TryGetValue(neighborPosition, out var neighborPart))         //проверяет, если в той стороне сосед
-            {
-                foreach (var face in FacingHelper.Faces(hereConnections & directionFilter))
-                {
-                    if ((neighborPart.Connection & FacingHelper.From(face, direction.Opposite)) != 0)
-                    {
-                        if (neighborPosition == nextPos)
-                        {
-                            return true;
-                        }
-
-                    }
-
-                    if ((neighborPart.Connection & FacingHelper.From(direction.Opposite, face)) != 0)
-                    {
-                        if (neighborPosition == nextPos)
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        //ищем соседей по ребрам
-        foreach (var direction in FacingHelper.Directions(hereConnections))
-        {
-            var directionFilter = FacingHelper.FromDirection(direction);
-
-            foreach (var face in FacingHelper.Faces(hereConnections & directionFilter))
-            {
-                var neighborPosition = part.Position.AddCopy(direction).AddCopy(face);
-
-                if (parts.TryGetValue(neighborPosition, out var neighborPart))
-                {
-                    if ((neighborPart.Connection & FacingHelper.From(direction.Opposite, face.Opposite)) != 0)
-                    {
-                        if (neighborPosition == nextPos)
-                        {
-                            return true;
-                        }
-                    }
-
-                    if ((neighborPart.Connection & FacingHelper.From(face.Opposite, direction.Opposite)) != 0)
-                    {
-                        if (neighborPosition == nextPos)
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-
-
-        
         return false;
     }
 

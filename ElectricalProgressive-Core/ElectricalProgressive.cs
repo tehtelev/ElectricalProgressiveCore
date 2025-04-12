@@ -15,7 +15,7 @@ using ElectricalProgressive.Utils;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Brings electricity into the game!",
-    Version = "0.9.3",
+    Version = "0.9.5",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
 
@@ -587,144 +587,127 @@ namespace ElectricalProgressive
 
 
                     // Этап 13: Проверка сгорания проводов и трансформаторов
-                    foreach (var part in parts)
-                    {                        
-
-                        if (part.Value.Transformator != null)
-                        {
-                            float energy = 0;
-                            float current = 0;
-                            for (int i = globalEnergyPackets.Count - 1; i >= 0; i--)
-                            {
-                                
-                                if (globalEnergyPackets[i].path.Last() == part.Key)
-                                {
-                                    energy += globalEnergyPackets[i].energy;
-                                    if (globalEnergyPackets[i].voltage == part.Value.Transformator.highVoltage)
-                                        globalEnergyPackets[i].voltage = part.Value.Transformator.lowVoltage;
-                                    else if (globalEnergyPackets[i].voltage == part.Value.Transformator.lowVoltage)
-                                        globalEnergyPackets[i].voltage = part.Value.Transformator.highVoltage;
-                                    current += globalEnergyPackets[i].energy / globalEnergyPackets[i].voltage;
-                                }
-                            }
-
-                            part.Value.current[5] = current;
-                            part.Value.Transformator.setPower(energy);
-                            part.Value.Transformator.Update();
-                        }
-                    }
+                    var packetsToRemove = new List<energyPacket>();
+                    var packetsByPosition = globalEnergyPackets
+                        .Where(p => p.path.Count > 0)
+                        .GroupBy(p => p.path[^1]) // Используем индекс из конца
+                        .ToDictionary(g => g.Key, g => g.ToList());
 
 
 
-                    copyg = new List<energyPacket>(globalEnergyPackets);
-
-                    foreach (var part in parts)
+                    foreach (var partEntry in parts)
                     {
-                        for (int j = copyg.Count - 1; j >= 0; j--)
+                        var partPos = partEntry.Key;
+                        var part = partEntry.Value;
+
+                        // Обработка трансформаторов
+                        if (part.Transformator != null && packetsByPosition.TryGetValue(partPos, out var packets))
                         {
-                            //пакет превышает напряжение проводника и находится на этой грани?
-                            if (copyg[j].path.Last() == part.Key && part.Value.eparams[copyg[j].facingFrom.Last()].voltage != 0 && copyg[j].voltage > part.Value.eparams[copyg[j].facingFrom.Last()].voltage)
+                            float totalEnergy = 0f;
+                            float totalCurrent = 0f;
+
+                            foreach (var packet in packets)
                             {
-                                parts[part.Key].eparams[copyg[j].facingFrom.Last()].burnout = true; //проводок сгорел на этой грани
+                                if (packet.facingFrom.Count == 0) continue;
 
-                                var removedFace = FacingHelper.FromFace(FacingHelper.BlockFacingFromIndex(copyg[j].facingFrom.Last()));
+                                totalEnergy += packet.energy;
+                                totalCurrent += packet.energy / packet.voltage;
 
-                                parts.TryGetValue(part.Key, out var part2);
-                                part2.Connection &= ~removedFace; //вычитаем по сути эти соединения
-
-                                RemoveConnections(ref part2, removedFace);  // убираем соединение
-
-                                //уничтожаем все пакеты в этой точке грани
-                                globalEnergyPackets.RemoveAt(j);
-
-                                //обновляем и обнуляем сгоревшие приборы
-                                if (part.Value.Consumer != null)
+                                int lastFaceIdx = packet.facingFrom[^1];
+                                if (lastFaceIdx >= 0 && lastFaceIdx < 6)
                                 {
-                                    parts[part.Key].Consumer!.Consume_receive(0.0F); //потребитель не получил энергию
-                                    parts[part.Key].Consumer!.Update(); //обновляем потребителя
-                                    parts[part.Key].Consumer = null; //обнуляем потребителя
+                                    if (packet.voltage == part.Transformator.highVoltage)
+                                        packet.voltage = part.Transformator.lowVoltage;
+                                    else if (packet.voltage == part.Transformator.lowVoltage)
+                                        packet.voltage = part.Transformator.highVoltage;
                                 }
-                                else if (part.Value.Producer != null)
-                                {
-                                    parts[part.Key].Producer!.Produce_order(0.0F); //генератор не выдал энергию
-                                    parts[part.Key].Producer!.Update(); //обновляем генератор
-                                    parts[part.Key].Producer = null; //обнуляем генератор
-                                }
-                                else if (part.Value.Accumulator != null)
-                                {
-                                    parts[part.Key].Accumulator!.SetCapacity(0.0F); //аккумулятор не принял энергию
-                                    parts[part.Key].Accumulator!.Update(); //обновляем аккумулятор
-                                    parts[part.Key].Accumulator = null; //обнуляем аккумулятор
-                                }
-                                else if (part.Value.Transformator != null)
-                                {
-                                    parts[part.Key].Transformator!.setPower(0.0F); //трансформатор не принял энергию
-                                    parts[part.Key].Transformator!.Update(); //обновляем трансформатор
-                                    parts[part.Key].Transformator = null; //обнуляем трансформатор
-                                }
+                            }
 
+                            int transformatorFaceIndex = 5; // Пример, должен быть определен по логике
+                            if (transformatorFaceIndex < part.current.Length)
+                                part.current[transformatorFaceIndex] = totalCurrent;
+
+                            part.Transformator.setPower(totalEnergy);
+                            part.Transformator.Update();
+                        }
+
+                        // Проверка на превышение напряжения
+                        if (packetsByPosition.TryGetValue(partPos, out var positionPackets))
+                        {
+                            foreach (var packet in positionPackets)
+                            {
+                                if (packet.facingFrom.Count == 0 || packet.nowProcessed.Count == 0)
+                                    continue;
+
+                                int lastFaceIndex = packet.facingFrom[^1];
+                                if (lastFaceIndex < 0 || lastFaceIndex >= 6) continue;
+
+                                var faceParams = part.eparams[lastFaceIndex];
+                                if (faceParams.voltage != 0 && packet.voltage > faceParams.voltage)
+                                {
+                                    part.eparams[lastFaceIndex].burnout = true;
+                                    var removedFace = FacingHelper.FromFace(
+                                        FacingHelper.BlockFacingFromIndex(lastFaceIndex));
+
+                                    // Получаем актуальную ссылку на part
+                                    if (parts.TryGetValue(partPos, out var actualPart))
+                                    {
+                                        actualPart.Connection &= ~removedFace;
+                                        RemoveConnections(ref actualPart, removedFace);
+                                        parts[partPos] = actualPart;
+                                    }
+
+                                    packetsToRemove.AddRange(
+                                        globalEnergyPackets.Where(p =>
+                                            p.path.Count > 0 &&
+                                            p.path[^1] == partPos
+                                        )
+                                    );
+
+                                    ResetComponents(part);
+                                    break;
+                                }
                             }
                         }
 
-                        copyg.Clear();
-
-                        copyg = new List<energyPacket>(globalEnergyPackets);
-
-                        for (int i = 0; i < 6; i++)
+                        // Проверка на превышение тока
+                        for (int faceIndex = 0; faceIndex < part.eparams.Length; faceIndex++)
                         {
-                            if (part.Value.eparams[i].voltage != 0 && part.Value.current[i] > part.Value.eparams[i].maxCurrent * part.Value.eparams[i].lines)
+                            if (faceIndex >= part.current.Length) continue;
+
+                            var faceParams = part.eparams[faceIndex];
+                            if (faceParams.voltage == 0 ||
+                                part.current[faceIndex] <= faceParams.maxCurrent * faceParams.lines) continue;
+
+                            part.eparams[faceIndex].burnout = true;
+                            var removedFace = FacingHelper.FromFace(
+                                FacingHelper.BlockFacingFromIndex(faceIndex));
+
+                            if (parts.TryGetValue(partPos, out var actualPart))
                             {
-                                part.Value.eparams[i].burnout = true;
-                                var removedFace = FacingHelper.FromFace(FacingHelper.BlockFacingFromIndex(i));
-                                this.parts.TryGetValue(part.Key, out var part2);
-                                part2.Connection &= ~removedFace;
-                                RemoveConnections(ref part2, removedFace);
-
-                                for (int j = copyg.Count - 1; j >= 0; j--)
-                                {
-                                    if (copyg[j].path.Last() == part.Key &&
-                                        copyg[j].nowProcessed.Last()[i])
-                                    {
-                                        globalEnergyPackets.RemoveAt(j);
-                                    }
-                                }
-
-                                if (part.Value.Consumer != null)
-                                {
-                                    part.Value.Consumer.Consume_receive(0);
-                                    part.Value.Consumer.Update();
-                                    part.Value.Consumer = null;
-                                }
-                                else if (part.Value.Producer != null)
-                                {
-                                    part.Value.Producer.Produce_order(0);
-                                    part.Value.Producer.Update();
-                                    part.Value.Producer = null;
-                                }
-                                else if (part.Value.Accumulator != null)
-                                {
-                                    part.Value.Accumulator.SetCapacity(0);
-                                    part.Value.Accumulator.Update();
-                                    part.Value.Accumulator = null;
-                                }
-                                else if (part.Value.Transformator != null)
-                                {
-                                    part.Value.Transformator.setPower(0);
-                                    part.Value.Transformator.Update();
-                                    part.Value.Transformator = null;
-                                }
+                                actualPart.Connection &= ~removedFace;
+                                RemoveConnections(ref actualPart, removedFace);
+                                parts[partPos] = actualPart;
                             }
+
+                            packetsToRemove.AddRange(
+                                globalEnergyPackets.Where(p =>
+                                    p.path.Count > 0 &&
+                                    p.path[^1] == partPos &&
+                                    p.nowProcessed.LastOrDefault()?[faceIndex] == true
+                                )
+                            );
+
+                            ResetComponents(part);
                         }
                     }
 
 
 
-                 
 
-
-
-
-                    copyg.Clear();
+                    // Пакетное удаление
+                    globalEnergyPackets.RemoveAll(p => packetsToRemove.Contains(p));
+                    packetsToRemove.Clear();
                 }
 
                 ticks--;
@@ -732,7 +715,25 @@ namespace ElectricalProgressive
         }
 
 
+        // Вынесенный метод сброса компонентов
+        private void ResetComponents(NetworkPart part)
+        {
+            part.Consumer?.Consume_receive(0f);
+            part.Producer?.Produce_order(0f);
+            part.Accumulator?.SetCapacity(0f);
+            part.Transformator?.setPower(0f);
 
+            part.Consumer?.Update();
+            part.Producer?.Update();
+            part.Accumulator?.Update();
+            part.Transformator?.Update();
+
+
+            part.Consumer = null;
+            part.Producer = null;
+            part.Accumulator = null;
+            part.Transformator = null;
+        }
 
 
 
