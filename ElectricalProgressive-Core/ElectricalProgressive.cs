@@ -15,7 +15,7 @@ using ElectricalProgressive.Utils;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Brings electricity into the game!",
-    Version = "0.9.5",
+    Version = "0.9.6",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
 
@@ -98,7 +98,7 @@ namespace ElectricalProgressive
         /// </summary>
         private void RegisterAltKeys()
         {
-            capi.Input.RegisterHotKey("AltPressForNetwork", Lang.Get("AltPressForNetworkName"), GlKeys.Unknown, HotkeyType.CharacterControls, true);
+            capi.Input.RegisterHotKey("AltPressForNetwork", Lang.Get("AltPressForNetworkName"), GlKeys.LAlt);
         }
 
 
@@ -588,7 +588,7 @@ namespace ElectricalProgressive
 
                     // Этап 13: Проверка сгорания проводов и трансформаторов
                     var packetsToRemove = new List<energyPacket>();
-                    var packetsByPosition = globalEnergyPackets
+                    var packetsByPosition = globalEnergyPackets   //сортируем пакеты по позициям
                         .Where(p => p.path.Count > 0)
                         .GroupBy(p => p.path[^1]) // Используем индекс из конца
                         .ToDictionary(g => g.Key, g => g.ToList());
@@ -728,7 +728,6 @@ namespace ElectricalProgressive
             part.Accumulator?.Update();
             part.Transformator?.Update();
 
-
             part.Consumer = null;
             part.Producer = null;
             part.Accumulator = null;
@@ -842,11 +841,15 @@ namespace ElectricalProgressive
         }
 
 
-
+        /// <summary>
+        /// Добавляем соединения
+        /// </summary>
+        /// <param name="part"></param>
+        /// <param name="addedConnections"></param>
+        /// <param name="setEparams"></param>
+        /// <exception cref="Exception"></exception>
         private void AddConnections(ref NetworkPart part, Facing addedConnections, (EParams, int) setEparams)
         {
-
-
             var networksByFace = new[]
             {
             new HashSet<Network>(),
@@ -855,7 +858,7 @@ namespace ElectricalProgressive
             new HashSet<Network>(),
             new HashSet<Network>(),
             new HashSet<Network>()
-        };
+            };
 
             foreach (var face in FacingHelper.Faces(part.Connection))           //ищет к каким сетям эти провода могут относиться
             {
@@ -1007,11 +1010,13 @@ namespace ElectricalProgressive
 
 
 
-
+        /// <summary>
+        /// Удаляем соединения
+        /// </summary>
+        /// <param name="part"></param>
+        /// <param name="removedConnections"></param>
         private void RemoveConnections(ref NetworkPart part, Facing removedConnections)
         {
-
-
             foreach (var blockFacing in FacingHelper.Faces(removedConnections))
             {
                 if (part.Networks[blockFacing.Index] is { } network)
@@ -1267,21 +1272,28 @@ namespace ElectricalProgressive
         }
     }
 
+
+    /// <summary>
+    /// Сеть
+    /// </summary>
     public class Network
     {
-        public readonly HashSet<IElectricAccumulator> Accumulators = new();
-        public readonly HashSet<IElectricConsumer> Consumers = new();
-        public readonly HashSet<IElectricProducer> Producers = new();
-        public readonly HashSet<IElectricTransformator> Transformators = new();
-        public readonly HashSet<BlockPos> PartPositions = new();
-        public float Consumption;
-        public float Overflow;
-        public float Production;
-        public float Lack;
-        public int version = 0;
-        public Dictionary<(BlockPos, BlockPos), PathCacheEntry> pathCache = new();
+        public readonly HashSet<IElectricAccumulator> Accumulators = new();  //Аккумуляторы
+        public readonly HashSet<IElectricConsumer> Consumers = new();       //Потребители
+        public readonly HashSet<IElectricProducer> Producers = new();           //Генераторы
+        public readonly HashSet<IElectricTransformator> Transformators = new();  //Трансформаторы
+        public readonly HashSet<BlockPos> PartPositions = new();     //Координаты позиций сети
+        public float Consumption; //Потребление
+        public float Overflow;    //Переполнение
+        public float Production;  //Генерация
+        public float Lack;        //Недостаток
+        public int version = 0;   //Версия сети для кэша пути
+        public Dictionary<(BlockPos, BlockPos), PathCacheEntry> pathCache = new();  //Кэш путей
     }
 
+    /// <summary>
+    /// Часть сети
+    /// </summary>
     public class NetworkPart
     {
         public readonly Network?[] Networks = new Network?[6];
@@ -1300,6 +1312,10 @@ namespace ElectricalProgressive
         }
     }
 
+
+    /// <summary>
+    /// Сборщик информации о сети
+    /// </summary>
     public class NetworkInformation
     {
         public float Consumption;
@@ -1316,30 +1332,48 @@ namespace ElectricalProgressive
         public float current;
     }
 
+    /// <summary>
+    /// Потребитель
+    /// </summary>
     internal class Consumer
     {
         public readonly IElectricConsumer ElectricConsumer;
         public Consumer(IElectricConsumer electricConsumer) => ElectricConsumer = electricConsumer;
     }
 
+
+    /// <summary>
+    /// Генератор
+    /// </summary>
     internal class Producer
     {
         public readonly IElectricProducer ElectricProducer;
         public Producer(IElectricProducer electricProducer) => ElectricProducer = electricProducer;
     }
 
+
+    /// <summary>
+    /// Аккумулятор
+    /// </summary>
     internal class Accumulator
     {
         public readonly IElectricAccumulator ElectricAccum;
         public Accumulator(IElectricAccumulator electricAccum) => ElectricAccum = electricAccum;
     }
 
+
+    /// <summary>
+    /// Конфигуратор сети
+    /// </summary>
     public class ElectricityConfig
     {
-        public int speedOfElectricity = 2;
+        public int speedOfElectricity = 4;
         public bool instant = false;
     }
 
+    /// <summary>
+    /// Кэш путей
+    /// </summary>
     public struct PathCacheEntry
     {
         public List<BlockPos>? Path;
