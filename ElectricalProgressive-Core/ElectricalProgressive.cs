@@ -15,7 +15,7 @@ using ElectricalProgressive.Utils;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Brings electricity into the game!",
-    Version = "0.9.6",
+    Version = "0.9.7",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
 
@@ -346,6 +346,11 @@ namespace ElectricalProgressive
                                     BlockPos posStore = producerPositions[indexStore];
                                     int indexCustomer = sim.Customers.IndexOf(customer);
 
+                                    // Проверяем, что пути и направления не равны null
+                                    if (paths[indexCustomer][indexStore]==null || facingFrom[indexCustomer][indexStore]== null || nowProcessedFaces[indexCustomer][indexStore] == null)
+                                        continue;
+
+                                    // Создаем пакет энергии
                                     var packet = new energyPacket
                                     {
                                         path = new List<BlockPos>(paths[indexCustomer][indexStore]),
@@ -354,6 +359,7 @@ namespace ElectricalProgressive
                                         facingFrom = new List<int>(facingFrom[indexCustomer][indexStore]),
                                         nowProcessed = new List<bool[]>(nowProcessedFaces[indexCustomer][indexStore].Select(arr => arr.ToArray()))
                                     };
+                                    // Добавляем пакет в глобальный список
                                     globalEnergyPackets.Add(packet);
                                 }
                             }
@@ -405,7 +411,7 @@ namespace ElectricalProgressive
                     logisticalTask(network, consumer2Positions, consumer2Requests, producer2Positions, producer2Give,
                         ref sim2, out var paths2, out var facingFrom2, out var nowProcessedFaces2);
 
-                    if (!instant)
+                    if (!instant) // Медленная передача
                     {
                         foreach (var customer in sim2.Customers)
                         {
@@ -417,6 +423,11 @@ namespace ElectricalProgressive
                                     BlockPos posStore = producer2Positions[indexStore];
                                     int indexCustomer = sim2.Customers.IndexOf(customer);
 
+                                    // Проверяем, что пути и направления не равны null
+                                    if (paths[indexCustomer][indexStore] == null || facingFrom[indexCustomer][indexStore] == null || nowProcessedFaces[indexCustomer][indexStore] == null)
+                                        continue;
+
+                                    // Создаем пакет энергии
                                     var packet = new energyPacket
                                     {
                                         path = new List<BlockPos>(paths2[indexCustomer][indexStore]),
@@ -425,13 +436,15 @@ namespace ElectricalProgressive
                                         facingFrom = new List<int>(facingFrom2[indexCustomer][indexStore]),
                                         nowProcessed = new List<bool[]>(nowProcessedFaces2[indexCustomer][indexStore].Select(arr => arr.ToArray()))
                                     };
+
+                                    // Добавляем пакет в глобальный список
                                     globalEnergyPackets.Add(packet);
                                 }
                             }
                         }
                     }
 
-                    if (instant)
+                    if (instant) // Мгновенная передача
                     {
                         j = 0;
                         foreach (var accum in accums)
@@ -457,6 +470,7 @@ namespace ElectricalProgressive
                     network.Production = producers.Sum(p => Math.Min(p.ElectricProducer.getPowerGive(), p.ElectricProducer.getPowerOrder()));
                     network.Lack = Math.Max(consumers.Sum(c => c.ElectricConsumer.getPowerRequest() - c.ElectricConsumer.getPowerReceive()), 0);
 
+                    // Обновление компонентов (они сами решают потом уже надо это им или нет)
                     accums.ForEach(a => a.ElectricAccum.Update());
                     producers.ForEach(p => p.ElectricProducer.Update());
                     consumers.ForEach(c => c.ElectricConsumer.Update());
@@ -464,7 +478,7 @@ namespace ElectricalProgressive
 
 
 
-                if (!instant)
+                if (!instant) // Если не мгновенная передача, то продолжаем обработку пакетов
                 {
                     // Этап 11: Потребление энергии пакетами
 
@@ -544,16 +558,24 @@ namespace ElectricalProgressive
                                 !nextPart.eparams[packet.facingFrom[packet.facingFrom.Count - 2]].burnout)
                             {
                                 var currentPart = parts[currentPos];
+
+                                // считаем сопротивление
                                 float resistance = currentPart.eparams[packet.facingFrom.Last()].resisitivity /
                                                    (currentPart.eparams[packet.facingFrom.Last()].lines *
                                                     currentPart.eparams[packet.facingFrom.Last()].crossArea);
+
+                                // Провод в изоляции теряет меньше энергии
                                 if (currentPart.eparams[packet.facingFrom.Last()].isolated)
                                     resistance /= 2.0f;
 
+                                // считаем ток по закону Ома
                                 float current = packet.energy / packet.voltage;
+
+                                // считаем потерю энергии по закону Джоуля
                                 float lossEnergy = current * current * resistance;
                                 packet.energy = Math.Max(packet.energy - lossEnergy, 0);
 
+                                // пакет не бесполезен
                                 if (packet.energy > 0.001f)
                                 {
                                     packet.path.RemoveAt(packet.path.Count - 1);
