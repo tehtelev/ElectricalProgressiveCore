@@ -15,7 +15,7 @@ using ElectricalProgressive.Utils;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Brings electricity into the game!",
-    Version = "0.9.7",
+    Version = "0.9.8",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
 
@@ -424,7 +424,7 @@ namespace ElectricalProgressive
                                     int indexCustomer = sim2.Customers.IndexOf(customer);
 
                                     // Проверяем, что пути и направления не равны null
-                                    if (paths[indexCustomer][indexStore] == null || facingFrom[indexCustomer][indexStore] == null || nowProcessedFaces[indexCustomer][indexStore] == null)
+                                    if (paths2[indexCustomer][indexStore] == null || facingFrom2[indexCustomer][indexStore] == null || nowProcessedFaces2[indexCustomer][indexStore] == null)
                                         continue;
 
                                     // Создаем пакет энергии
