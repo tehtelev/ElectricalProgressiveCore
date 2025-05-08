@@ -15,7 +15,7 @@ using ElectricalProgressive.Utils;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Brings electricity into the game!",
-    Version = "0.9.8",
+    Version = "0.9.10",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
 
@@ -45,7 +45,7 @@ namespace ElectricalProgressive
         public int speedOfElectricity; // Скорость электричества в проводах (блоков в тик)
         public bool instant; // Расчет мгновенно?
         private PathFinder pathFinder = new PathFinder(); // Модуль поиска путей
-        private ICoreAPI api = null!;
+        public ICoreAPI api = null!;
         private ICoreClientAPI capi = null!;
         private ElectricityConfig config;
 
@@ -57,7 +57,8 @@ namespace ElectricalProgressive
         public override void Start(ICoreAPI api)
         {
             base.Start(api);
-            this.api = api;
+            this.api = api;            
+
             api.Event.RegisterGameTickListener(this.OnGameTick, 500);
 
             if (api.ModLoader.IsModEnabled("combatoverhaul"))
@@ -668,6 +669,8 @@ namespace ElectricalProgressive
                                 if (faceParams.voltage != 0 && packet.voltage > faceParams.voltage)
                                 {
                                     part.eparams[lastFaceIndex].burnout = true;
+
+                                    /* вероятен каскад сгорания с закоментированным этим кодом, но зато дым идет красиво
                                     var removedFace = FacingHelper.FromFace(
                                         FacingHelper.BlockFacingFromIndex(lastFaceIndex));
 
@@ -678,6 +681,7 @@ namespace ElectricalProgressive
                                         RemoveConnections(ref actualPart, removedFace);
                                         parts[partPos] = actualPart;
                                     }
+                                    */
 
                                     packetsToRemove.AddRange(
                                         globalEnergyPackets.Where(p =>
@@ -686,7 +690,7 @@ namespace ElectricalProgressive
                                         )
                                     );
 
-                                    ResetComponents(part);
+                                    ResetComponents(ref part);
                                     break;
                                 }
                             }
@@ -702,6 +706,8 @@ namespace ElectricalProgressive
                                 part.current[faceIndex] <= faceParams.maxCurrent * faceParams.lines) continue;
 
                             part.eparams[faceIndex].burnout = true;
+
+                            /* вероятен каскад сгорания с закоментированным этим кодом, но зато дым идет красиво
                             var removedFace = FacingHelper.FromFace(
                                 FacingHelper.BlockFacingFromIndex(faceIndex));
 
@@ -711,6 +717,7 @@ namespace ElectricalProgressive
                                 RemoveConnections(ref actualPart, removedFace);
                                 parts[partPos] = actualPart;
                             }
+                            */
 
                             packetsToRemove.AddRange(
                                 globalEnergyPackets.Where(p =>
@@ -720,7 +727,7 @@ namespace ElectricalProgressive
                                 )
                             );
 
-                            ResetComponents(part);
+                            ResetComponents(ref part);
                         }
                     }
 
@@ -738,7 +745,7 @@ namespace ElectricalProgressive
 
 
         // Вынесенный метод сброса компонентов
-        private void ResetComponents(NetworkPart part)
+        private void ResetComponents(ref NetworkPart part)
         {
             part.Consumer?.Consume_receive(0f);
             part.Producer?.Produce_order(0f);
@@ -750,10 +757,10 @@ namespace ElectricalProgressive
             part.Accumulator?.Update();
             part.Transformator?.Update();
 
-            part.Consumer = null;
-            part.Producer = null;
-            part.Accumulator = null;
-            part.Transformator = null;
+            //part.Consumer = null;
+           // part.Producer = null;
+            //part.Accumulator = null;
+            //part.Transformator = null;
         }
 
 
