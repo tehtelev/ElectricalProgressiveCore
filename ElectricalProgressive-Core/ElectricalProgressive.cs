@@ -8,6 +8,11 @@ using Vintagestory.API.Server;
 using Vintagestory.API.Config;
 using ElectricalProgressive.Interface;
 using ElectricalProgressive.Utils;
+using Vintagestory.GameContent;
+using System.Threading.Channels;
+using static ElectricalProgressive.ElectricalProgressive;
+using ProtoBuf;
+using Vintagestory.API.Util;
 
 [assembly: ModDependency("game", "1.20.0")]
 [assembly: ModInfo(
@@ -15,7 +20,7 @@ using ElectricalProgressive.Utils;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Brings electricity into the game!",
-    Version = "0.9.10",
+    Version = "1.0.0",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
 
@@ -26,6 +31,7 @@ namespace ElectricalProgressive
         private readonly List<Consumer> consumers = new();
         private readonly List<Producer> producers = new();
         private readonly List<Accumulator> accums = new();
+        private readonly List<Transformator> transformators = new();
 
         private readonly List<energyPacket> globalEnergyPackets = new(); // Глобальный список пакетов энергии
 
@@ -47,7 +53,11 @@ namespace ElectricalProgressive
         private PathFinder pathFinder = new PathFinder(); // Модуль поиска путей
         public ICoreAPI api = null!;
         private ICoreClientAPI capi = null!;
+        private ICoreServerAPI sapi = null!;
         private ElectricityConfig config;
+        public static DamageManager? damageManager;
+        public static WeatherSystemServer? WeatherSystemServer;
+  
 
 
         /// <summary>
@@ -57,7 +67,10 @@ namespace ElectricalProgressive
         public override void Start(ICoreAPI api)
         {
             base.Start(api);
-            this.api = api;            
+            this.api = api;
+
+            //инициализируем обработчик уронов
+            damageManager = new DamageManager(api);
 
             api.Event.RegisterGameTickListener(this.OnGameTick, 500);
 
@@ -90,7 +103,10 @@ namespace ElectricalProgressive
             base.StartClientSide(api);
             this.capi = api;
             RegisterAltKeys();
+
         }
+
+
 
 
 
@@ -101,6 +117,19 @@ namespace ElectricalProgressive
         {
             capi.Input.RegisterHotKey("AltPressForNetwork", Lang.Get("AltPressForNetworkName"), GlKeys.LAlt);
         }
+
+
+        public override void StartServerSide(ICoreServerAPI api)
+        {
+            base.StartServerSide(api);            
+
+            this.sapi = api;
+
+            WeatherSystemServer = api.ModLoader.GetModSystem<WeatherSystemServer>();
+
+        }
+
+
 
 
 
@@ -221,8 +250,8 @@ namespace ElectricalProgressive
                         if (entry.Path != null)
                         {
                             paths[i][j] = entry.Path;
-                            facingFrom[i][j] = entry.FacingFrom;
-                            nowProcessedFaces[i][j] = entry.NowProcessedFaces;
+                            facingFrom[i][j] = entry.FacingFrom!;
+                            nowProcessedFaces[i][j] = entry.NowProcessedFaces!;
                             distances[i][j] = entry.Path.Count;
                         }
                         else
@@ -275,6 +304,8 @@ namespace ElectricalProgressive
         }
 
 
+       
+
 
 
         /// <summary>
@@ -295,6 +326,8 @@ namespace ElectricalProgressive
                     producers.Clear();
                     consumers.Clear();
                     accums.Clear();
+                    transformators.Clear();
+
                     consumerPositions.Clear();
                     consumerRequests.Clear();
                     producerPositions.Clear();
@@ -348,7 +381,7 @@ namespace ElectricalProgressive
                                     int indexCustomer = sim.Customers.IndexOf(customer);
 
                                     // Проверяем, что пути и направления не равны null
-                                    if (paths[indexCustomer][indexStore]==null || facingFrom[indexCustomer][indexStore]== null || nowProcessedFaces[indexCustomer][indexStore] == null)
+                                    if (paths[indexCustomer][indexStore] == null || facingFrom[indexCustomer][indexStore] == null || nowProcessedFaces[indexCustomer][indexStore] == null)
                                         continue;
 
                                     // Создаем пакет энергии
@@ -472,9 +505,16 @@ namespace ElectricalProgressive
                     network.Lack = Math.Max(consumers.Sum(c => c.ElectricConsumer.getPowerRequest() - c.ElectricConsumer.getPowerReceive()), 0);
 
                     // Обновление компонентов (они сами решают потом уже надо это им или нет)
+                    foreach (var electricTransformator in network.Transformators)
+                    {
+                        transformators.Add(new Transformator(electricTransformator));
+                    }
+
                     accums.ForEach(a => a.ElectricAccum.Update());
                     producers.ForEach(p => p.ElectricProducer.Update());
                     consumers.ForEach(c => c.ElectricConsumer.Update());
+                    transformators.ForEach(t => t.ElectricTransformator.Update());
+
                 }
 
 
@@ -492,7 +532,8 @@ namespace ElectricalProgressive
                         {
                             var pos = packet.path[0];
                             if (parts.TryGetValue(pos, out var part) &&
-                                part.eparams.Where(s => s.voltage > 0).Any(s => packet.voltage >= s.voltage))
+                                part.eparams.Where(s => s.voltage > 0 && !s.burnout)     // <-- добавили проверку !burnout
+                                            .Any(s => packet.voltage >= s.voltage))
                             {
                                 //суммируем все полученные пакеты данным потребителем
                                 if (sumEnergy.TryGetValue(pos, out var value))
@@ -525,9 +566,9 @@ namespace ElectricalProgressive
                     foreach (var pair in sumEnergy)
                     {
                         if (parts[pair.Key].Consumer != null)
-                            parts[pair.Key].Consumer.Consume_receive(pair.Value);
+                            parts[pair.Key].Consumer!.Consume_receive(pair.Value);
                         else if (parts[pair.Key].Accumulator != null)
-                            parts[pair.Key].Accumulator.Store(pair.Value);
+                            parts[pair.Key].Accumulator!.Store(pair.Value);
                     }
 
 
@@ -554,19 +595,21 @@ namespace ElectricalProgressive
                         {
                             var currentPos = packet.path.Last();
                             var nextPos = packet.path[packet.path.Count - 2];
+                            var currentFacingFrom = packet.facingFrom.Last();
+
                             if (parts.TryGetValue(nextPos, out var nextPart) &&
-                                pathFinder.ToGetNeighbor(currentPos, parts, packet.facingFrom.Last(), nextPos) &&
+                                pathFinder.ToGetNeighbor(currentPos, parts, currentFacingFrom, nextPos) &&
                                 !nextPart.eparams[packet.facingFrom[packet.facingFrom.Count - 2]].burnout)
                             {
                                 var currentPart = parts[currentPos];
 
                                 // считаем сопротивление
-                                float resistance = currentPart.eparams[packet.facingFrom.Last()].resisitivity /
-                                                   (currentPart.eparams[packet.facingFrom.Last()].lines *
-                                                    currentPart.eparams[packet.facingFrom.Last()].crossArea);
+                                float resistance = currentPart.eparams[currentFacingFrom].resisitivity /
+                                                   (currentPart.eparams[currentFacingFrom].lines *
+                                                    currentPart.eparams[currentFacingFrom].crossArea);
 
                                 // Провод в изоляции теряет меньше энергии
-                                if (currentPart.eparams[packet.facingFrom.Last()].isolated)
+                                if (currentPart.eparams[currentFacingFrom].isolated)
                                     resistance /= 2.0f;
 
                                 // считаем ток по закону Ома
@@ -575,6 +618,9 @@ namespace ElectricalProgressive
                                 // считаем потерю энергии по закону Джоуля
                                 float lossEnergy = current * current * resistance;
                                 packet.energy = Math.Max(packet.energy - lossEnergy, 0);
+
+                                // пересчитаем ток уже с учетом потерь
+                                current = packet.energy / packet.voltage;
 
                                 // пакет не бесполезен
                                 if (packet.energy > 0.001f)
@@ -623,7 +669,53 @@ namespace ElectricalProgressive
                         var partPos = partEntry.Key;
                         var part = partEntry.Value;
 
-                        // Обработка трансформаторов
+
+
+                        var updated = damageManager.DamageByEnvironment(this.sapi, ref part);
+
+                        if (updated)
+                        {
+
+                            for (int faceIndex = 0; faceIndex < part.eparams.Length; faceIndex++)
+                            {
+                                
+                                var faceParams = part.eparams[faceIndex];
+                                if (faceParams.voltage == 0 || !faceParams.burnout)
+                                    continue;
+
+
+                                part.Networks[faceIndex].pathCache.Clear(); // очищаем кэш путей сети
+
+                                /*
+                                var removedFace = FacingHelper.FromFace(
+                                    FacingHelper.BlockFacingFromIndex(faceIndex));
+
+                                if (parts.TryGetValue(partPos, out var actualPart))
+                                {
+                                    actualPart.Connection &= ~removedFace;
+                                    RemoveConnections(ref actualPart, removedFace);
+                                    parts[partPos] = actualPart;
+                                }
+                                
+
+                                packetsToRemove.AddRange(
+                                    globalEnergyPackets.Where(p =>
+                                        p.path.Count > 0 &&
+                                        p.path[^1] == partPos &&
+                                        p.nowProcessed.LastOrDefault()?[faceIndex] == true
+                                    )
+                                );
+
+                                */
+
+                                ResetComponents(ref part);
+                            }
+
+
+                        }
+
+
+                            // Обработка трансформаторов
                         if (part.Transformator != null && packetsByPosition.TryGetValue(partPos, out var packets))
                         {
                             float totalEnergy = 0f;
@@ -646,7 +738,9 @@ namespace ElectricalProgressive
                                 }
                             }
 
-                            int transformatorFaceIndex = 5; // Пример, должен быть определен по логике
+
+
+                            int transformatorFaceIndex = 5; // Пример, должен быть определен по логике!!!!
                             if (transformatorFaceIndex < part.current.Length)
                                 part.current[transformatorFaceIndex] = totalCurrent;
 
@@ -669,8 +763,10 @@ namespace ElectricalProgressive
                                 if (faceParams.voltage != 0 && packet.voltage > faceParams.voltage)
                                 {
                                     part.eparams[lastFaceIndex].burnout = true;
+                                    
+                                    part.Networks[lastFaceIndex].pathCache.Clear(); // очищаем кэш путей сети
 
-                                    /* вероятен каскад сгорания с закоментированным этим кодом, но зато дым идет красиво
+                                    /*
                                     var removedFace = FacingHelper.FromFace(
                                         FacingHelper.BlockFacingFromIndex(lastFaceIndex));
 
@@ -706,8 +802,12 @@ namespace ElectricalProgressive
                                 part.current[faceIndex] <= faceParams.maxCurrent * faceParams.lines) continue;
 
                             part.eparams[faceIndex].burnout = true;
+                           
 
-                            /* вероятен каскад сгорания с закоментированным этим кодом, но зато дым идет красиво
+                            part.Networks[faceIndex].pathCache.Clear(); // очищаем кэш путей сети
+
+
+                            /* 
                             var removedFace = FacingHelper.FromFace(
                                 FacingHelper.BlockFacingFromIndex(faceIndex));
 
@@ -758,7 +858,7 @@ namespace ElectricalProgressive
             part.Transformator?.Update();
 
             //part.Consumer = null;
-           // part.Producer = null;
+            // part.Producer = null;
             //part.Accumulator = null;
             //part.Transformator = null;
         }
@@ -1239,9 +1339,10 @@ namespace ElectricalProgressive
         public byte lines;          //количество линий
         public float crossArea;     //площадь поперечного сечения
         public bool burnout;        //провод сгорел
-        public bool isolated;       //изолированный провод
+        public bool isolated;       //изолированный проводник
+        public bool isolatedEnvironment; //изолированный от окружающей среды проводник
 
-        public EParams(int voltage, float maxCurrent, string material, float resisitivity, byte lines, float crossArea, bool burnout, bool isolated)
+        public EParams(int voltage, float maxCurrent, string material, float resisitivity, byte lines, float crossArea, bool burnout, bool isolated, bool isolatedEnvironment)
         {
             this.voltage = voltage;
             this.maxCurrent = maxCurrent;
@@ -1251,6 +1352,7 @@ namespace ElectricalProgressive
             this.crossArea = crossArea;
             this.burnout = burnout;
             this.isolated = isolated;
+            this.isolatedEnvironment = isolatedEnvironment;
         }
 
         public EParams()
@@ -1263,6 +1365,7 @@ namespace ElectricalProgressive
             this.crossArea = 0.0F;
             this.burnout = false;
             this.isolated = false;
+            this.isolatedEnvironment = true;
         }
 
 
@@ -1275,10 +1378,11 @@ namespace ElectricalProgressive
                    lines == other.lines &&
                    crossArea.Equals(other.crossArea) &&
                    burnout == other.burnout &&
-                   isolated == other.isolated;
+                   isolated == other.isolated &&
+                   isolatedEnvironment == other.isolatedEnvironment;
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return obj is EParams other && Equals(other);
         }
@@ -1296,6 +1400,7 @@ namespace ElectricalProgressive
                 hash = hash * 31 + crossArea.GetHashCode();
                 hash = hash * 31 + burnout.GetHashCode();
                 hash = hash * 31 + isolated.GetHashCode();
+                hash = hash * 31 + isolatedEnvironment.GetHashCode();
                 return hash;
             }
         }
@@ -1368,6 +1473,16 @@ namespace ElectricalProgressive
     {
         public readonly IElectricConsumer ElectricConsumer;
         public Consumer(IElectricConsumer electricConsumer) => ElectricConsumer = electricConsumer;
+    }
+
+
+    /// <summary>
+    /// Трансформатор
+    /// </summary>
+    internal class Transformator
+    {
+        public readonly IElectricTransformator ElectricTransformator;
+        public Transformator(IElectricTransformator electricTransformator) => ElectricTransformator = electricTransformator;
     }
 
 

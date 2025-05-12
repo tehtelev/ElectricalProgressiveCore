@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Cairo.Freetype;
 using ProtoBuf;
 using Vintagestory.API.MathTools;
 
@@ -60,6 +61,8 @@ public static class FacingHelper
 {
     public static Facing FromFace(BlockFacing face)
     {
+        if (face == null)
+            return Facing.None;
         return face.Index switch
         {
             BlockFacing.indexNORTH => Facing.NorthAll,
@@ -74,6 +77,8 @@ public static class FacingHelper
 
     public static Facing FromDirection(BlockFacing direction)
     {
+        if (direction == null)
+            return Facing.None;
         return direction.Index switch
         {
             BlockFacing.indexNORTH => Facing.AllNorth,
