@@ -20,7 +20,7 @@ using Vintagestory.API.Util;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Brings electricity into the game!",
-    Version = "1.0.0",
+    Version = "1.0.1",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
 
@@ -45,7 +45,7 @@ namespace ElectricalProgressive
         private readonly List<BlockPos> producer2Positions = new();
         private readonly List<float> producer2Give = new();
 
-        private readonly HashSet<Network> networks = new();
+        public readonly HashSet<Network> networks = new();
         private readonly Dictionary<BlockPos, NetworkPart> parts = new(); // Хранит все элементы всех цепей
         public static bool combatoverhaul = false; // Установлен ли combatoverhaul
         public int speedOfElectricity; // Скорость электричества в проводах (блоков в тик)

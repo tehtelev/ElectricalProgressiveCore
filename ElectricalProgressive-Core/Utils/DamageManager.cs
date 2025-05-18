@@ -35,9 +35,20 @@ namespace ElectricalProgressive.Utils
 
         private ICoreAPI api;
 
-
         public global::ElectricalProgressive.ElectricalProgressive? System =>
              this.api?.ModLoader.GetModSystem<global::ElectricalProgressive.ElectricalProgressive>();
+
+
+
+        /// <summary>
+        /// Конструктор класса
+        /// </summary>
+        /// <param name="api"></param>
+        public DamageManager(ICoreAPI api)
+        {
+            this.api = api;
+
+        }
 
 
 
@@ -71,7 +82,6 @@ namespace ElectricalProgressive.Utils
             if (now - _lastCleanup < CleanupIntervalMs)
                 return;
 
-           
 
             _lastCleanup = now;
 
@@ -132,22 +142,6 @@ namespace ElectricalProgressive.Utils
 
 
 
-
-
-
-
-
-
-
-        /// <summary>
-        /// Конструктор класса
-        /// </summary>
-        /// <param name="api"></param>
-        public DamageManager(ICoreAPI api)
-        {
-            this.api = api;
-
-        }
 
 
         /// <summary>
@@ -284,7 +278,10 @@ namespace ElectricalProgressive.Utils
             // с некоторым шансом даже если дождь попадает
             // но рано или поздно спалит
             // heightRain=0 когда чанк не прогружен, либо sapi=null не трогать условие, иначе спалит ВСЁ
-            bool isRaining = heightRain > 0 && heightRain <= part.Position.Y + Y && precip > 0.1f && api.World.Rand.NextDouble() < 0.05f;
+            bool isRaining = heightRain > 0
+                && heightRain <= part.Position.Y + Y
+                && precip > 0.1f
+                && api.World.Rand.NextDouble() < 0.05f;
 
 
 
@@ -296,9 +293,25 @@ namespace ElectricalProgressive.Utils
             void Burnout(int i, ref NetworkPart part)
             {
                 part.eparams[i].burnout = true;
-                part.Networks[i]?.pathCache.Clear();                
+                part.Networks[i]?.pathCache.Clear();
 
             }
+
+            /* сильно увеличивает нагрузку 
+            bool[] powered = new bool[6]; //массив для хранения устройств, которые под напряжением
+
+            for (int i = 0; i <= 5; i++) //перебор всех граней
+            {
+                
+                var networkInformation = this.System?.GetNetworks(pos, FacingHelper.FromFace(FacingHelper.BlockFacingFromIndex(i)));      //получаем информацию о сети
+
+                if (networkInformation?.NumberOfProducers > 0 || networkInformation?.NumberOfAccumulators > 0) //если в сети есть генераторы или аккумы
+                {
+                    powered[i] = true; //значит под напряжением
+                }
+            }
+            */
+
 
             // Проверка дождя для всех граней
             if (isRaining)
@@ -321,11 +334,11 @@ namespace ElectricalProgressive.Utils
                 {
                     for (int i = 0; i < 6; i++)
                     {
-                        Burnout(i, ref part);                        
+                        Burnout(i, ref part);
                     }
                     updated = true;
 
-                    if (sapi!=null)
+                    if (sapi != null)
                         sapi.World.BlockAccessor.BreakBlock(pos, null);
                     return updated;
                 }
@@ -374,10 +387,12 @@ namespace ElectricalProgressive.Utils
                 }
             }
 
+            /* для отладки
             if (updated)
             {
                 isRaining = isRaining;
             }
+            */
 
             return updated;
         }

@@ -120,18 +120,17 @@ public class PathFinder
 
         var (path, faces) = ReconstructPath(start, end, endBlockFacing[0], cameFrom);    //реконструкция маршрута
 
-        for (int i = 0; i < path.Count; i++)                                //подготавливаем дополнительные данные
+
+        if (path != null)
         {
-            facingFromList.Add(facingFrom[(path[i], faces[i])]);
+            for (int i = 0; i < path.Count; i++)                                //подготавливаем дополнительные данные
+            {
+                facingFromList.Add(facingFrom[(path[i], faces[i])]);
 
+                nowProcessedFacesList.Add(nowProcessedFaces[(path[i], faces[i])]);
 
-            //if (i > 0)
-            nowProcessedFacesList.Add(nowProcessedFaces[(path[i], faces[i])]);
-
+            }
         }
-
-        //nowProcessedFacesList.Add(new bool[6] { true, true, true, true, true, true });
-
 
 
         return (path, facingFromList, nowProcessedFacesList);
@@ -360,7 +359,19 @@ public class PathFinder
         {
             path.Add(current.end);
             faces.Add(current.endFacing);
-            current = cameFrom[current];
+
+
+            // бывает, что клиент убрал блок, а сервер еще не успел
+            try
+            {
+                current = cameFrom[current];
+            }
+            catch (Exception ex)
+            {
+                
+                return (null!, null!);
+            }
+
         }
 
         path.Reverse();
