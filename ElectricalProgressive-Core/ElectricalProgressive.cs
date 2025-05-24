@@ -13,6 +13,7 @@ using System.Threading.Channels;
 using static ElectricalProgressive.ElectricalProgressive;
 using ProtoBuf;
 using Vintagestory.API.Util;
+using System.Net.Sockets;
 
 [assembly: ModDependency("game", "1.20.0")]
 [assembly: ModInfo(
@@ -387,12 +388,15 @@ namespace ElectricalProgressive
                                     // Создаем пакет энергии
                                     var packet = new energyPacket
                                     {
-                                        path = new List<BlockPos>(paths[indexCustomer][indexStore]),
+                                        path = new List<BlockPos>(paths[indexCustomer][indexStore]),                                        
                                         energy = value,
                                         voltage = parts[posStore].eparams[facingFrom[indexCustomer][indexStore].Last()].voltage,
                                         facingFrom = new List<int>(facingFrom[indexCustomer][indexStore]),
                                         nowProcessed = new List<bool[]>(nowProcessedFaces[indexCustomer][indexStore].Select(arr => arr.ToArray()))
                                     };
+                                    packet.currentIndex = packet.path.Count - 1; // Устанавливаем индекс текущей позиции пакета
+
+
                                     // Добавляем пакет в глобальный список
                                     globalEnergyPackets.Add(packet);
                                 }
@@ -470,6 +474,7 @@ namespace ElectricalProgressive
                                         facingFrom = new List<int>(facingFrom2[indexCustomer][indexStore]),
                                         nowProcessed = new List<bool[]>(nowProcessedFaces2[indexCustomer][indexStore].Select(arr => arr.ToArray()))
                                     };
+                                    packet.currentIndex = packet.path.Count - 1; // Устанавливаем индекс текущей позиции пакета
 
                                     // Добавляем пакет в глобальный список
                                     globalEnergyPackets.Add(packet);
@@ -528,7 +533,7 @@ namespace ElectricalProgressive
                     for (int i = copyg.Count - 1; i >= 0; i--)
                     {
                         var packet = copyg[i];
-                        if (packet.path.Count == 1)
+                        if (packet.currentIndex == 0)
                         {
                             var pos = packet.path[0];
                             if (parts.TryGetValue(pos, out var part) &&
@@ -591,15 +596,17 @@ namespace ElectricalProgressive
                     for (int i = copyg.Count - 1; i >= 0; i--)
                     {
                         var packet = copyg[i];
-                        if (packet.path.Count >= 2)
+                        var curIndex = packet.currentIndex; //текущий индекс в пакете
+
+                        if (curIndex > 0)
                         {
-                            var currentPos = packet.path.Last();
-                            var nextPos = packet.path[packet.path.Count - 2];
-                            var currentFacingFrom = packet.facingFrom.Last();
+                            var currentPos = packet.path[curIndex];
+                            var nextPos = packet.path[curIndex-1];
+                            var currentFacingFrom = packet.facingFrom[curIndex];
 
                             if (parts.TryGetValue(nextPos, out var nextPart) &&
                                 pathFinder.ToGetNeighbor(currentPos, parts, currentFacingFrom, nextPos) &&
-                                !nextPart.eparams[packet.facingFrom[packet.facingFrom.Count - 2]].burnout)
+                                !nextPart.eparams[packet.facingFrom[curIndex - 1]].burnout)
                             {
                                 var currentPart = parts[currentPos];
 
@@ -625,9 +632,8 @@ namespace ElectricalProgressive
                                 // пакет не бесполезен
                                 if (packet.energy > 0.001f)
                                 {
-                                    packet.path.RemoveAt(packet.path.Count - 1);
-                                    packet.facingFrom.RemoveAt(packet.facingFrom.Count - 1);
-                                    packet.nowProcessed.RemoveAt(packet.nowProcessed.Count - 1);
+
+                                    packet.currentIndex--; // уменьшаем индекс пакета
 
                                     int j = 0;
                                     foreach (var face in packet.nowProcessed.Last())
@@ -657,9 +663,9 @@ namespace ElectricalProgressive
 
                     // Этап 13: Проверка сгорания проводов и трансформаторов
                     var packetsToRemove = new List<energyPacket>();
-                    var packetsByPosition = globalEnergyPackets   //сортируем пакеты по позициям
-                        .Where(p => p.path.Count > 0)
-                        .GroupBy(p => p.path[^1]) // Используем индекс из конца
+                    var packetsByPosition = globalEnergyPackets      //сортируем пакеты по позициям
+ //                       .Where(p => p.path.Count > 0)                //нужна ли эта проверка?
+                        .GroupBy(p => p.path[p.currentIndex])        // Используем индекс 
                         .ToDictionary(g => g.Key, g => g.ToList());
 
 
@@ -728,7 +734,7 @@ namespace ElectricalProgressive
                                 totalEnergy += packet.energy;
                                 totalCurrent += packet.energy / packet.voltage;
 
-                                int lastFaceIdx = packet.facingFrom[^1];
+                                int lastFaceIdx = packet.facingFrom[packet.currentIndex];
                                 if (lastFaceIdx >= 0 && lastFaceIdx < 6)
                                 {
                                     if (packet.voltage == part.Transformator.highVoltage)
@@ -756,7 +762,7 @@ namespace ElectricalProgressive
                                 if (packet.facingFrom.Count == 0 || packet.nowProcessed.Count == 0)
                                     continue;
 
-                                int lastFaceIndex = packet.facingFrom[^1];
+                                int lastFaceIndex = packet.facingFrom[packet.currentIndex];
                                 if (lastFaceIndex < 0 || lastFaceIndex >= 6) continue;
 
                                 var faceParams = part.eparams[lastFaceIndex];
@@ -781,8 +787,8 @@ namespace ElectricalProgressive
 
                                     packetsToRemove.AddRange(
                                         globalEnergyPackets.Where(p =>
-                                            p.path.Count > 0 &&
-                                            p.path[^1] == partPos
+                            //                p.path.Count > 0 &&
+                                            p.path[p.currentIndex] == partPos
                                         )
                                     );
 
@@ -821,8 +827,8 @@ namespace ElectricalProgressive
 
                             packetsToRemove.AddRange(
                                 globalEnergyPackets.Where(p =>
-                                    p.path.Count > 0 &&
-                                    p.path[^1] == partPos &&
+                                //        p.path.Count > 0 &&
+                                    p.path[p.currentIndex] == partPos &&
                                     p.nowProcessed.LastOrDefault()?[faceIndex] == true
                                 )
                             );
@@ -1316,11 +1322,12 @@ namespace ElectricalProgressive
     /// </summary>
     public class energyPacket
     {
-        public List<BlockPos> path = new();
-        public float energy;
-        public int voltage;
-        public List<int> facingFrom = new();
-        public List<bool[]> nowProcessed = new();
+        public List<BlockPos> path = new();             // путь
+        public float energy;                            // энергия
+        public int voltage;                             // напряжение
+        public List<int> facingFrom = new();            // откуда пришел
+        public List<bool[]> nowProcessed = new();       // массивы по всем граням, которые уже обработаны
+        public int currentIndex=-1;                      // Текущая позиция в пути
     }
 
 
