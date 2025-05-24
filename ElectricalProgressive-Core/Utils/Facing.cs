@@ -194,6 +194,44 @@ public static class FacingHelper
 
 
 
+    public static int GetFaceIndex(Facing facing)
+    {
+        if (facing == Facing.None) return -1;
+
+        if ((facing & Facing.NorthEast) != 0) return 0;
+        if ((facing & Facing.NorthWest) != 0) return 0;
+        if ((facing & Facing.NorthUp) != 0) return 0;
+        if ((facing & Facing.NorthDown) != 0) return 0;
+
+        if ((facing & Facing.EastNorth) != 0) return 1;
+        if ((facing & Facing.EastSouth) != 0) return 1;
+        if ((facing & Facing.EastUp) != 0) return 1;
+        if ((facing & Facing.EastDown) != 0) return 1;
+
+        if ((facing & Facing.SouthEast) != 0) return 2;
+        if ((facing & Facing.SouthWest) != 0) return 2;
+        if ((facing & Facing.SouthUp) != 0) return 2;
+        if ((facing & Facing.SouthDown) != 0) return 2;
+
+        if ((facing & Facing.WestNorth) != 0) return 3;
+        if ((facing & Facing.WestSouth) != 0) return 3;
+        if ((facing & Facing.WestUp) != 0) return 3;
+        if ((facing & Facing.WestDown) != 0) return 3;
+
+        if ((facing & Facing.UpNorth) != 0) return 4;
+        if ((facing & Facing.UpEast) != 0) return 4;
+        if ((facing & Facing.UpSouth) != 0) return 4;
+        if ((facing & Facing.UpWest) != 0) return 4;
+
+        if ((facing & Facing.DownNorth) != 0) return 5;
+        if ((facing & Facing.DownEast) != 0) return 5;
+        if ((facing & Facing.DownSouth) != 0) return 5;
+        if ((facing & Facing.DownWest) != 0) return 5;
+
+        return -1;
+    }
+
+
 
 
     /*

@@ -16,13 +16,13 @@ public class PathFinder
     /// <param name="end"></param>
     /// <param name="networkPositions"></param>
     /// <returns></returns>
-    public (List<BlockPos>, List<int>, List<bool[]>) FindShortestPath(BlockPos start, BlockPos end, Network network, Dictionary<BlockPos, NetworkPart> parts)
+    public (List<BlockPos>, List<int>, List<bool[]>, List<Facing>) FindShortestPath(BlockPos start, BlockPos end, Network network, Dictionary<BlockPos, NetworkPart> parts)
     {
 
         //проверяем наличие начальной и конечной точки в этой цепи
         var networkPositions = network.PartPositions;
         if (!networkPositions.Contains(start) || !networkPositions.Contains(end))
-            return (null!, null!, null!);
+            return (null!, null!, null!, null!);
 
 
         //смотрим с какой грани начинать
@@ -116,10 +116,11 @@ public class PathFinder
         }
 
         if (!cameFromList.Contains(end))        //не нашли конец?
-            return (null!, null!, null!);
+            return (null!, null!, null!, null!);
 
         var (path, faces) = ReconstructPath(start, end, endBlockFacing[0], cameFrom);    //реконструкция маршрута
 
+        var nowProcessingFaces = new List<Facing>(); //храним тут Facing граней, которые сейчас в работе
 
         if (path != null)
         {
@@ -127,13 +128,25 @@ public class PathFinder
             {
                 facingFromList.Add(facingFrom[(path[i], faces[i])]);
 
-                nowProcessedFacesList.Add(nowProcessedFaces[(path[i], faces[i])]);
+                var npf = nowProcessedFaces[(path[i], faces[i])];
 
+                nowProcessedFacesList.Add(npf);
+
+                //фильтруем только нужные грани
+                var facing = parts[path[i]].Connection &
+                    ( (npf[0] ? Facing.NorthAll : Facing.None)
+                    | (npf[1] ? Facing.EastAll : Facing.None)
+                    | (npf[2] ? Facing.SouthAll : Facing.None)
+                    | (npf[3] ? Facing.WestAll : Facing.None)
+                    | (npf[4] ? Facing.UpAll : Facing.None)
+                    | (npf[5] ? Facing.DownAll : Facing.None));
+
+                nowProcessingFaces.Add(facing);
             }
         }
 
 
-        return (path, facingFromList, nowProcessedFacesList);
+        return (path, facingFromList, nowProcessedFacesList, nowProcessingFaces);
     }
 
 

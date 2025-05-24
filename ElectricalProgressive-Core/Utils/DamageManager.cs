@@ -236,14 +236,16 @@ namespace ElectricalProgressive.Utils
         /// </summary>
         /// <param name="api"></param>
         /// <param name="part"></param>
-        public bool DamageByEnvironment(ICoreServerAPI sapi, ref NetworkPart part)
+        public bool DamageByEnvironment(ICoreServerAPI sapi, ref NetworkPart part, ref IBlockAccessor blockAccessor)
         {
             //без api тут точно нечего делать
             if (api == null)
                 return false;
 
+
+
             Vec3d tmpPos = new Vec3d();
-            Block here = api.World.BlockAccessor.GetBlock(part.Position);
+            Block here = blockAccessor.GetBlock(part.Position);
             float Y = 0.0f;
             bool updated = false;
 
@@ -280,13 +282,12 @@ namespace ElectricalProgressive.Utils
             // heightRain=0 когда чанк не прогружен, либо sapi=null не трогать условие, иначе спалит ВСЁ
             bool isRaining = heightRain > 0
                 && heightRain <= part.Position.Y + Y
-                && precip > 0.1f
-                && api.World.Rand.NextDouble() < 0.05f;
+                && precip > 0.1f;
+               // && api.World.Rand.NextDouble() < 0.05f;
 
 
 
-            // Кэшируем доступ к BlockAccessor
-            var blockAccessor = api.World.BlockAccessor;
+
             BlockPos pos = part.Position;
 
             // Локальная функция для обработки сгорания
