@@ -46,14 +46,14 @@ namespace ElectricalProgressive
         private readonly List<BlockPos> producer2Positions = new();
         private readonly List<float> producer2Give = new();
 
-        private List<BlockPos>[][] paths;
-        private List<int>[][] facingFrom;
-        private List<bool[]>[][] nowProcessedFaces;
-        private List<Facing>[][] usedConnections;
-        private List<BlockPos>[][] paths2;
-        private List<int>[][] facingFrom2;
-        private List<bool[]>[][] nowProcessedFaces2;
-        private List<Facing>[][] usedConnections2;
+        private List<BlockPos>[][]? paths;
+        private List<int>[][]? facingFrom;
+        private List<bool[]>[][]? nowProcessedFaces;
+        private List<Facing>[][]? usedConnections;
+        private List<BlockPos>[][]? paths2;
+        private List<int>[][]? facingFrom2;
+        private List<bool[]>[][]? nowProcessedFaces2;
+        private List<Facing>[][]? usedConnections2;
 
         Dictionary<BlockPos, List<EnergyPacket>> packetsByPosition = new Dictionary<BlockPos, List<EnergyPacket>>(); //Словарь для хранения пакетов по позициям
 
@@ -66,11 +66,12 @@ namespace ElectricalProgressive
         public ICoreAPI api = null!;
         private ICoreClientAPI capi = null!;
         private ICoreServerAPI sapi = null!;
-        private ElectricityConfig config;
+        private ElectricityConfig? config;
         public static DamageManager? damageManager;
         public static WeatherSystemServer? WeatherSystemServer;
-        private Simulation sim, sim2;
 
+        private Simulation sim = new Simulation();
+        private Simulation sim2 = new Simulation();
 
 
 
@@ -134,6 +135,10 @@ namespace ElectricalProgressive
         }
 
 
+        /// <summary>
+        /// Серверная сторона
+        /// </summary>
+        /// <param name="api"></param>
         public override void StartServerSide(ICoreServerAPI api)
         {
             base.StartServerSide(api);
@@ -385,7 +390,7 @@ namespace ElectricalProgressive
                     }
 
                     // Этап 4: Распределение энергии ----------------------------------------------------------------------------
-                    sim = new Simulation();
+                    sim.Reset(); // Сбрасываем состояние симуляции
                     logisticalTask(network, consumerPositions, consumerRequests, producerPositions, producerGive,
                         ref sim, out paths, out facingFrom, out nowProcessedFaces, out usedConnections);
 
@@ -408,8 +413,10 @@ namespace ElectricalProgressive
                                     indexCustomer = sim.Customers.IndexOf(customer);
 
                                     // Проверяем, что пути и направления не равны null
-                                    if (paths[indexCustomer][indexStore] == null || facingFrom[indexCustomer][indexStore] == null || nowProcessedFaces[indexCustomer][indexStore] == null)
-                                        continue;
+                                    if (paths[indexCustomer][indexStore] == null ||
+                                        facingFrom[indexCustomer][indexStore] == null ||
+                                        nowProcessedFaces[indexCustomer][indexStore] == null)
+                                            continue;
 
                                     // Создаем пакет энергии
                                     var packet = new EnergyPacket
@@ -456,6 +463,7 @@ namespace ElectricalProgressive
                         j++;
                     }
 
+
                     // Этап 6: Зарядка аккумуляторов    ----------------------------------------------------------------------------
                     foreach (var accum in accums)
                     {
@@ -463,6 +471,8 @@ namespace ElectricalProgressive
                         consumer2Positions.Add(accum.ElectricAccum.Pos);
                         consumer2Requests.Add(requestedEnergy);
                     }
+
+
 
                     // Этап 7: Остатки генераторов  ----------------------------------------------------------------------------
                     j = 0;
@@ -474,8 +484,10 @@ namespace ElectricalProgressive
                         j++;
                     }
 
+
+
                     // Этап 8: Распределение энергии для аккумуляторов ----------------------------------------------------------------------------
-                    sim2 = new Simulation();
+                    sim2.Reset(); // Сбрасываем состояние симуляции
                     logisticalTask(network, consumer2Positions, consumer2Requests, producer2Positions, producer2Give,
                         ref sim2, out paths2, out facingFrom2, out nowProcessedFaces2, out usedConnections2);
 
@@ -496,8 +508,10 @@ namespace ElectricalProgressive
                                     indexCustomer = sim2.Customers.IndexOf(customer);
 
                                     // Проверяем, что пути и направления не равны null
-                                    if (paths2[indexCustomer][indexStore] == null || facingFrom2[indexCustomer][indexStore] == null || nowProcessedFaces2[indexCustomer][indexStore] == null)
-                                        continue;
+                                    if (paths2[indexCustomer][indexStore] == null ||
+                                        facingFrom2[indexCustomer][indexStore] == null ||
+                                        nowProcessedFaces2[indexCustomer][indexStore] == null)
+                                            continue;
 
                                     // Создаем пакет энергии
                                     var packet = new EnergyPacket
@@ -567,11 +581,12 @@ namespace ElectricalProgressive
                     // Этап 11: Потребление энергии пакетами
                     BlockPos pos;                   // Временная переменная для позиции
                     Dictionary<BlockPos, float> sumEnergy = new Dictionary<BlockPos, float>();
-                    var copyg = new List<EnergyPacket>(globalEnergyPackets);
+
+
                     EnergyPacket packet;                    // Временная переменная для пакета энергии
-                    for (int i = copyg.Count - 1; i >= 0; i--)
+                    for (int i = globalEnergyPackets.Count - 1; i >= 0; i--)
                     {
-                        packet = copyg[i];
+                        packet = globalEnergyPackets[i];
                         if (packet.currentIndex == 0)
                         {
                             pos = packet.path[0];
@@ -618,10 +633,6 @@ namespace ElectricalProgressive
 
                     sumEnergy.Clear();
 
-                    copyg.Clear();
-
-
-
 
 
 
@@ -630,18 +641,15 @@ namespace ElectricalProgressive
                         part2.Value.current = new float[6];
 
 
-                    copyg = new List<EnergyPacket>(globalEnergyPackets);
 
-
-                    float resistance, current, lossEnergy;  // Переменные для расчета сопротивления, тока и потерь энергии
-                    
+                    float resistance, current, lossEnergy;  // Переменные для расчета сопротивления, тока и потерь энергии                    
                     int curIndex, currentFacingFrom;        // текущий индекс и направление в пакете
                     BlockPos currentPos, nextPos;           // текущая и следующая позиции в пути пакета
                     NetworkPart nextPart, currentPart;      // Временные переменные для частей сети
 
-                    for (int i = copyg.Count - 1; i >= 0; i--)
+                    for (int i = globalEnergyPackets.Count - 1; i >= 0; i--)
                     {
-                        packet = copyg[i];
+                        packet = globalEnergyPackets[i];
                         curIndex = packet.currentIndex; //текущий индекс в пакете
 
                         if (curIndex > 0)
@@ -702,10 +710,6 @@ namespace ElectricalProgressive
                         }
                     }
 
-                    copyg.Clear();
-
-
-
 
 
                     // Этап 13: Проверка сгорания проводов и трансформаторов ----------------------------------------------------------------------------
@@ -743,7 +747,7 @@ namespace ElectricalProgressive
 
                         //с шансом 5% проверяется у блока как на него влияет окружающая среда
                         updated = api.World.Rand.NextDouble() < 0.05f &&
-                            damageManager.DamageByEnvironment(this.sapi, ref part, ref bAccessor);
+                            damageManager!.DamageByEnvironment(this.sapi, ref part, ref bAccessor);
 
                         if (updated)
                         {
@@ -755,7 +759,7 @@ namespace ElectricalProgressive
                                     continue;
 
 
-                                part.Networks[faceIndex].pathCache.Clear(); // очищаем кэш путей сети
+                                part.Networks[faceIndex]!.pathCache.Clear(); // очищаем кэш путей сети
 
                                 ResetComponents(ref part);
                             }
@@ -810,7 +814,7 @@ namespace ElectricalProgressive
                                 {
                                     part.eparams[lastFaceIndex].burnout = true;
 
-                                    part.Networks[lastFaceIndex].pathCache.Clear(); // очищаем кэш путей сети
+                                    part.Networks[lastFaceIndex]!.pathCache.Clear(); // очищаем кэш путей сети
 
 
                                     if (packet2.path[packet2.currentIndex] == partPos)
@@ -835,7 +839,7 @@ namespace ElectricalProgressive
 
                             part.eparams[faceIndex].burnout = true;
 
-                            part.Networks[faceIndex].pathCache.Clear(); // очищаем кэш путей сети
+                            part.Networks[faceIndex]!.pathCache.Clear(); // очищаем кэш путей сети
 
 
                             packetsToRemove.AddRange(
@@ -876,7 +880,7 @@ namespace ElectricalProgressive
             part.Transformator?.Update();
 
             //part.Consumer = null;
-            // part.Producer = null;
+            //part.Producer = null;
             //part.Accumulator = null;
             //part.Transformator = null;
         }

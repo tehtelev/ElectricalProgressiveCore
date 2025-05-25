@@ -10,44 +10,122 @@ namespace ElectricalProgressive.Utils
     {
         public List<Customer> Customers { get; } = new List<Customer>();
         public List<Store> Stores { get; } = new List<Store>();
-        
+
         public void Run()
         {
-            foreach (var store in Stores)                //работаем со всеми генераторами в этой сети                    
+            // Инициализация суммарного запроса для магазинов
+            for (int i = 0; i < Stores.Count; i++)
             {
-                store.totalRequest = 0;                 //инициализируем суммарное выпрашенное число энергии
+                Stores[i].totalRequest = 0;
             }
 
+            bool hasActiveStores;
+            bool hasPendingCustomers;
 
             do
             {
-                Customers.ForEach(c => c.UpdateOrderedStores());        //обновляет пройденный путь и купленное уже покупателями
-                Stores.ForEach(s => s.ResetRequests());                 //сбрасывает список запросов магазинам
-
-                foreach (var customer in Customers.Where(c => c.Remaining > 0))     //в цикле выбирает только тех покупателей, кому еще нужна энергия
+                // Обновление магазинов для покупателей
+                for (int i = 0; i < Customers.Count; i++)
                 {
+                    Customers[i].UpdateOrderedStores();
+                }
+
+                // Сброс запросов магазинов
+                for (int i = 0; i < Stores.Count; i++)
+                {
+                    Stores[i].ResetRequests();
+                }
+
+                // Обработка запросов покупателей
+                for (int c = 0; c < Customers.Count; c++)
+                {
+                    var customer = Customers[c];
+                    if (customer.Remaining <= 0.001f) continue;
+
                     float remaining = customer.Remaining;
-                    foreach (var store in customer.GetAvailableStores()) //вынести перед циклом выборку !!!
+                    var availableStores = customer.GetAvailableStores();
+
+                    // Используем pattern matching для массива вместо IEnumerable
+                    if (availableStores is Store[] storesArray)
                     {
-                        if (store.Stock <= 0.001F && store.ImNull)           //если у магазина уже ноль и он был обработан, то пропускаем
-                            continue;
-
-                        float requested = remaining;
-                        store.CurrentRequests[customer] = requested;        //покупатель просит столько
-                        remaining -= requested;
-
-                        if (remaining <= 0)    //покупатель отправил запросы везде?
-                            break;
+                        ProcessStoresArray(customer, remaining, storesArray);
+                    }
+                    else
+                    {
+                        ProcessStoresEnumerable(customer, remaining, availableStores);
                     }
                 }
 
-                //обработка запросов
-                Stores.ForEach(s => s.ProcessRequests());
+                // Обработка запросов в магазинах
+                for (int i = 0; i < Stores.Count; i++)
+                {
+                    Stores[i].ProcessRequests();
+                }
 
-                //продолжать пока есть ненулевые или пока потребность еще есть
-            } while (Stores.Any(s => !s.ImNull) && Customers.Any(c => c.Remaining > 0));
+                // Проверка условий продолжения
+                hasActiveStores = false;
+                for (int i = 0; i < Stores.Count; i++)
+                {
+                    if (!Stores[i].ImNull)
+                    {
+                        hasActiveStores = true;
+                        break;
+                    }
+                }
+
+                hasPendingCustomers = false;
+                for (int i = 0; i < Customers.Count; i++)
+                {
+                    if (Customers[i].Remaining > 0.001f)
+                    {
+                        hasPendingCustomers = true;
+                        break;
+                    }
+                }
+
+            } while (hasActiveStores && hasPendingCustomers);
+        }
+
+        private void ProcessStoresArray(Customer customer, float remaining, Store[] stores)
+        {
+            for (int s = 0; s < stores.Length; s++)
+            {
+                var store = stores[s];
+                if (store.Stock <= 0.001f && store.ImNull) continue;
+
+                float requested = remaining;
+                store.CurrentRequests[customer] = requested;
+                remaining -= requested;
+
+                if (remaining <= 0.001f) break;
+            }
+        }
+
+        private void ProcessStoresEnumerable(Customer customer, float remaining, IEnumerable<Store> stores)
+        {
+            foreach (var store in stores)
+            {
+                if (store.Stock <= 0.001f && store.ImNull) continue;
+
+                float requested = remaining;
+                store.CurrentRequests[customer] = requested;
+                remaining -= requested;
+
+                if (remaining <= 0.001f) break;
+            }
         }
 
 
+        /// <summary>
+        /// Сбрасывает состояние симуляции, очищая магазины и клиентов.
+        /// </summary>
+        public void Reset()
+        {
+            // Сброс магазинов
+            Stores.Clear();
+
+            // Сброс клиентов
+            Customers.Clear();
+        }
     }
 }

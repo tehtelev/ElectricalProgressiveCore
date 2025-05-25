@@ -77,17 +77,24 @@ public class PathFinder
         }
 
         bool first = true;                      //маркер для первого прохода
+                                           
+        List<BlockPos> buf1;     //список соседей
+        List<int> buf2;          //список граней соседей
+        bool[] buf3;            //список граней, которые сейчас в работе
+        bool[] buf4;            //список граней, которые уже просчитаны
+        BlockPos currentPos;    //текущая позиция
+        int currentFace;        //текущая грань
 
         while (queue.Count > 0)                 //пока очередь не опустеет
         {
-            var (currentPos, currentFace) = queue.Dequeue();
+            (currentPos, currentFace) = queue.Dequeue();
 
             if (currentPos.Equals(end))            //достигли конца и прекращаем просчет
                 break;
 
 
-            //собственно сам поиск соседа данной точке
-            var (buf1, buf2, buf3, buf4) = GetNeighbors(currentPos, network, parts, first, processedFaces[currentPos], facingFrom[(currentPos, currentFace)]);
+            // Затем используйте распаковку:
+            (buf1, buf2, buf3, buf4) = GetNeighbors(currentPos, network, parts, first, processedFaces[currentPos], facingFrom[(currentPos, currentFace)]);
 
 
 
@@ -124,16 +131,19 @@ public class PathFinder
 
         if (path != null)
         {
+            bool[] npf;    
+            Facing facing; 
+
             for (int i = 0; i < path.Count; i++)                                //подготавливаем дополнительные данные
             {
                 facingFromList.Add(facingFrom[(path[i], faces[i])]);
 
-                var npf = nowProcessedFaces[(path[i], faces[i])];
+                npf = nowProcessedFaces[(path[i], faces[i])];
 
                 nowProcessedFacesList.Add(npf);
 
                 //фильтруем только нужные грани
-                var facing = parts[path[i]].Connection &
+                facing = parts[path[i]].Connection &
                     ( (npf[0] ? Facing.NorthAll : Facing.None)
                     | (npf[1] ? Facing.EastAll : Facing.None)
                     | (npf[2] ? Facing.SouthAll : Facing.None)
@@ -287,7 +297,7 @@ public class PathFinder
 
 
 
-
+    /*
     /// <summary>
     /// Вычисляет позиции соседей от текущего значения
     /// </summary>
@@ -353,6 +363,7 @@ public class PathFinder
         return false;
     }
 
+    */
 
     /// <summary>
     /// Реконструирует маршрут
