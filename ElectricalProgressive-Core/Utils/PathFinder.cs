@@ -16,7 +16,7 @@ public class PathFinder
     /// <param name="end"></param>
     /// <param name="networkPositions"></param>
     /// <returns></returns>
-    public (List<BlockPos>, List<int>, List<bool[]>, List<Facing>) FindShortestPath(BlockPos start, BlockPos end, Network network, Dictionary<BlockPos, NetworkPart> parts)
+    public (BlockPos[], int[], bool[][], Facing[]) FindShortestPath(BlockPos start, BlockPos end, Network network, Dictionary<BlockPos, NetworkPart> parts)
     {
 
         //проверяем наличие начальной и конечной точки в этой цепи
@@ -57,16 +57,13 @@ public class PathFinder
         var facingFrom = new Dictionary<(BlockPos, int), int>();
         facingFrom[(start, startBlockFacing[0])] = startBlockFacing[0];
 
-        //хранит номер задействованной грани соседа (для вывода наружу)
-        var facingFromList = new List<int>();
 
         //хранит для каждого кусочка цепи посещенные грани в данный момент
         var nowProcessedFaces = new Dictionary<(BlockPos, int), bool[]>();
         nowProcessedFaces[(start, startBlockFacing[0])] = new bool[6] { false, false, false, false, false, false };
         nowProcessedFaces[(start, startBlockFacing[0])][startBlockFacing[0]] = true;
 
-        //хранит для каждого кусочка цепи посещенные грани в данный момент (для вывода наружу)
-        var nowProcessedFacesList = new List<bool[]>();
+
 
 
         //хранит для каждого кусочка цепи все посещенные грани
@@ -127,20 +124,25 @@ public class PathFinder
 
         var (path, faces) = ReconstructPath(start, end, endBlockFacing[0], cameFrom);    //реконструкция маршрута
 
-        var nowProcessingFaces = new List<Facing>(); //храним тут Facing граней, которые сейчас в работе
+        Facing[] nowProcessingFaces=null!;      //храним тут Facing граней, которые сейчас в работе                                           
+        bool[][] nowProcessedFacesList = null!; //хранит для каждого кусочка цепи посещенные грани в данный момент (для вывода наружу)                                                
+        int[] facingFromList = null!;            //хранит номер задействованной грани соседа (для вывода наружу)
 
         if (path != null)
         {
             bool[] npf;    
-            Facing facing; 
+            Facing facing;
+            nowProcessingFaces = new Facing[path.Count()]; 
+            nowProcessedFacesList = new bool[path.Count()][];
+            facingFromList = new int[path.Count()];
 
-            for (int i = 0; i < path.Count; i++)                                //подготавливаем дополнительные данные
+            for (int i = 0; i < path.Count(); i++)                                //подготавливаем дополнительные данные
             {
-                facingFromList.Add(facingFrom[(path[i], faces[i])]);
+                facingFromList[i]=facingFrom[(path[i], faces[i])];
 
                 npf = nowProcessedFaces[(path[i], faces[i])];
 
-                nowProcessedFacesList.Add(npf);
+                nowProcessedFacesList[i]= npf;
 
                 //фильтруем только нужные грани
                 facing = parts[path[i]].Connection &
@@ -151,7 +153,7 @@ public class PathFinder
                     | (npf[4] ? Facing.UpAll : Facing.None)
                     | (npf[5] ? Facing.DownAll : Facing.None));
 
-                nowProcessingFaces.Add(facing);
+                nowProcessingFaces[i]=facing;
             }
         }
 
@@ -373,33 +375,43 @@ public class PathFinder
     /// <param name="endFacing"></param>
     /// <param name="cameFrom"></param>
     /// <returns></returns>
-    private (List<BlockPos>, List<int>) ReconstructPath(BlockPos start, BlockPos end, int endFacing, Dictionary<(BlockPos, int), (BlockPos, int)> cameFrom)
+    private (BlockPos[]? path, int[]? faces) ReconstructPath(
+        BlockPos start,
+        BlockPos end,
+        int endFacing,
+        Dictionary<(BlockPos, int), (BlockPos, int)> cameFrom)
     {
-        var path = new List<BlockPos>();
-        var faces = new List<int>();
-        var current = (end, endFacing);
+        // 1) Первый проход: считаем длину пути
+        int length = 0;
+        var current = (pos: end, facing: endFacing);
 
-        while (current.end != null)
+        while (current.pos != null)
         {
-            path.Add(current.end);
-            faces.Add(current.endFacing);
-
-
-            // бывает, что клиент убрал блок, а сервер еще не успел
-            try
-            {
-                current = cameFrom[current];
-            }
-            catch (Exception ex)
-            {
-                
-                return (null!, null!);
-            }
-
+            length++;
+            // пытаемся перейти к предку; если не можем — значит путь неполный
+            if (!cameFrom.TryGetValue(current, out current))
+                return (null, null);
         }
 
-        path.Reverse();
-        faces.Reverse();
-        return path[0].Equals(start) ? (path, faces) : (null!, null!);
+        // 2) Аллокация массивов ровно под нужный размер
+        var pathArray = new BlockPos[length];
+        var faceArray = new int[length];
+
+        // 3) Второй проход: заполняем массивы с конца в начало
+        current = (end, endFacing);
+        for (int i = length - 1; i >= 0; i--)
+        {
+            pathArray[i] = current.pos;
+            faceArray[i] = current.facing;
+            // при последней итерации (i == 0) попытка провалится, но нам уже не нужен следующий элемент
+            cameFrom.TryGetValue(current, out current);
+        }
+
+        // 4) Проверяем, что начало пути совпадает со стартовой точкой
+        return pathArray[0].Equals(start)
+            ? (pathArray, faceArray)
+            : (null, null);
     }
+
+
 }
