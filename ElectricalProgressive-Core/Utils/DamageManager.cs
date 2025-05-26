@@ -294,7 +294,6 @@ namespace ElectricalProgressive.Utils
             void Burnout(int i, ref NetworkPart part)
             {
                 part.eparams[i].burnout = true;
-                part.Networks[i]?.pathCache.Clear();
 
             }
 
