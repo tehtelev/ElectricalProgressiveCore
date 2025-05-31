@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+п»їusing System.Runtime.InteropServices;
 using Vintagestory.API.MathTools;
 
 namespace ElectricalProgressive.Interface;
@@ -6,66 +6,66 @@ namespace ElectricalProgressive.Interface;
 public interface IElectricAccumulator
 {
     /// <summary>
-    /// Координата аккумулятора
+    /// РљРѕРѕСЂРґРёРЅР°С‚Р° Р°РєРєСѓРјСѓР»СЏС‚РѕСЂР°
     /// </summary>
     public BlockPos Pos { get; }
 
     /// <summary>
-    /// Максимальный ток отдачи/сохранения
+    /// РњР°РєСЃРёРјР°Р»СЊРЅС‹Р№ С‚РѕРє РѕС‚РґР°С‡Рё/СЃРѕС…СЂР°РЅРµРЅРёСЏ
     /// </summary>
     public float power { get; }
 
     /// <summary>
-    /// Максимальная емкость аккумулятора
+    /// РњР°РєСЃРёРјР°Р»СЊРЅР°СЏ РµРјРєРѕСЃС‚СЊ Р°РєРєСѓРјСѓР»СЏС‚РѕСЂР°
     /// </summary>
     /// <returns></returns>
     public float GetMaxCapacity();
 
     /// <summary>
-    /// Текущая емкость аккумулятора
+    /// РўРµРєСѓС‰Р°СЏ РµРјРєРѕСЃС‚СЊ Р°РєРєСѓРјСѓР»СЏС‚РѕСЂР°
     /// </summary>
     /// <returns></returns>
     public float GetCapacity();
 
     /// <summary>
-    /// Предыдущее значение емкости аккумулятора
+    /// РџСЂРµРґС‹РґСѓС‰РµРµ Р·РЅР°С‡РµРЅРёРµ РµРјРєРѕСЃС‚Рё Р°РєРєСѓРјСѓР»СЏС‚РѕСЂР°
     /// </summary>
     /// <returns></returns>
     public float GetLastCapacity();
 
     /// <summary>
-    /// Задает сразу емкость аккумулятору (вызывать только при установке аккумулятора)
+    /// Р—Р°РґР°РµС‚ СЃСЂР°Р·Сѓ РµРјРєРѕСЃС‚СЊ Р°РєРєСѓРјСѓР»СЏС‚РѕСЂСѓ Рё РјРЅРѕР¶РёС‚РµР»СЊ РµРјРєРѕСЃС‚Рё РјР°РєСЃРёРјР°Р»СЊРЅРѕР№ (РІС‹Р·С‹РІР°С‚СЊ С‚РѕР»СЊРєРѕ РїСЂРё СѓСЃС‚Р°РЅРѕРІРєРµ Р°РєРєСѓРјСѓР»СЏС‚РѕСЂР°)
     /// </summary>
     /// <returns></returns>
-    public void SetCapacity(float value);
+    public void SetCapacity(float value, float multDurab = 1.0F);
 
     /// <summary>
-    /// Сохранить энергию
+    /// РЎРѕС…СЂР°РЅРёС‚СЊ СЌРЅРµСЂРіРёСЋ
     /// </summary>
     /// <param name="amount"></param>
     public void Store(float amount);
 
     /// <summary>
-    /// Может сохранить энергии за раз
+    /// РњРѕР¶РµС‚ СЃРѕС…СЂР°РЅРёС‚СЊ СЌРЅРµСЂРіРёРё Р·Р° СЂР°Р·
     /// </summary>
     /// <param name="amount"></param>
     public float canStore();
 
     /// <summary>
-    /// Выдать энергию
+    /// Р’С‹РґР°С‚СЊ СЌРЅРµСЂРіРёСЋ
     /// </summary>
     /// <param name="amount"></param>
     public float Release(float amount);
 
 
     /// <summary>
-    /// Может выдать энергии за раз
+    /// РњРѕР¶РµС‚ РІС‹РґР°С‚СЊ СЌРЅРµСЂРіРёРё Р·Р° СЂР°Р·
     /// </summary>
     /// <param name="amount"></param>
     public float canRelease();
 
     /// <summary>
-    /// Обновляем Entity
+    /// РћР±РЅРѕРІР»СЏРµРј Entity
     /// </summary>
     public void Update();
 }
