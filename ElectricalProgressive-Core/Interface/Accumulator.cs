@@ -1,5 +1,4 @@
-﻿using System.Runtime.InteropServices;
-using Vintagestory.API.MathTools;
+﻿using Vintagestory.API.MathTools;
 
 namespace ElectricalProgressive.Interface;
 
@@ -57,7 +56,6 @@ public interface IElectricAccumulator
     /// <param name="amount"></param>
     public float Release(float amount);
 
-
     /// <summary>
     /// Может выдать энергии за раз
     /// </summary>
@@ -69,4 +67,3 @@ public interface IElectricAccumulator
     /// </summary>
     public void Update();
 }
-

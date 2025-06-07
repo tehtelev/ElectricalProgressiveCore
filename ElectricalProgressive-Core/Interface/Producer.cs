@@ -1,41 +1,38 @@
-using Vintagestory.API.MathTools;
+п»їusing Vintagestory.API.MathTools;
 
 namespace ElectricalProgressive.Interface;
 
 public interface IElectricProducer
 {
     /// <summary>
-    /// Координата аккумулятора
+    /// РљРѕРѕСЂРґРёРЅР°С‚Р° Р°РєРєСѓРјСѓР»СЏС‚РѕСЂР°
     /// </summary>
     public BlockPos Pos { get; }
 
-
     /// <summary>
-    /// Система запрашивает у генератора сколько ей нужно в данный момент выдать
+    /// РЎРёСЃС‚РµРјР° Р·Р°РїСЂР°С€РёРІР°РµС‚ Сѓ РіРµРЅРµСЂР°С‚РѕСЂР° СЃРєРѕР»СЊРєРѕ РµР№ РЅСѓР¶РЅРѕ РІ РґР°РЅРЅС‹Р№ РјРѕРјРµРЅС‚ РІС‹РґР°С‚СЊ
     /// </summary>
     public void Produce_order(float amount);
 
-
     /// <summary>
-    /// Сколько может выдать генератор сейчас максимум
+    /// РЎРєРѕР»СЊРєРѕ РјРѕР¶РµС‚ РІС‹РґР°С‚СЊ РіРµРЅРµСЂР°С‚РѕСЂ СЃРµР№С‡Р°СЃ РјР°РєСЃРёРјСѓРј
     /// </summary>
     /// <returns></returns>
     public float getPowerGive();
 
     /// <summary>
-    /// Сколько в данный момент просят с генератора (нагрузка)
+    /// РЎРєРѕР»СЊРєРѕ РІ РґР°РЅРЅС‹Р№ РјРѕРјРµРЅС‚ РїСЂРѕСЃСЏС‚ СЃ РіРµРЅРµСЂР°С‚РѕСЂР° (РЅР°РіСЂСѓР·РєР°)
     /// </summary>
     /// <returns></returns>
     public float getPowerOrder();
 
     /// <summary>
-    /// Генератор выдает энергию в систему
+    /// Р“РµРЅРµСЂР°С‚РѕСЂ РІС‹РґР°РµС‚ СЌРЅРµСЂРіРёСЋ РІ СЃРёСЃС‚РµРјСѓ
     /// </summary>
     public float Produce_give();
 
     /// <summary>
-    /// Обновляем Entity
+    /// РћР±РЅРѕРІР»СЏРµРј Entity
     /// </summary>
     public void Update();
-
 }

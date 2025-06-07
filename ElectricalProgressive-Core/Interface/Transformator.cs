@@ -1,43 +1,38 @@
-using Vintagestory.API.MathTools;
+п»їusing Vintagestory.API.MathTools;
 
 namespace ElectricalProgressive.Interface;
 
 public interface IElectricTransformator
 {
     /// <summary>
-    /// Координата трансформатора
+    /// РљРѕРѕСЂРґРёРЅР°С‚Р° С‚СЂР°РЅСЃС„РѕСЂРјР°С‚РѕСЂР°
     /// </summary>
     public BlockPos Pos { get; }
 
     /// <summary>
-    /// Высокое напряжение трансформатора
+    /// Р’С‹СЃРѕРєРѕРµ РЅР°РїСЂСЏР¶РµРЅРёРµ С‚СЂР°РЅСЃС„РѕСЂРјР°С‚РѕСЂР°
     /// </summary>
     public int highVoltage { get; }
 
-
-
     /// <summary>
-    /// Низкое напряжение трансформатора
+    /// РќРёР·РєРѕРµ РЅР°РїСЂСЏР¶РµРЅРёРµ С‚СЂР°РЅСЃС„РѕСЂРјР°С‚РѕСЂР°
     /// </summary>
     public int lowVoltage { get; }
 
     /// <summary>
-    /// Сколько мощность сейчас на трансформаторе
+    /// РЎРєРѕР»СЊРєРѕ РјРѕС‰РЅРѕСЃС‚СЊ СЃРµР№С‡Р°СЃ РЅР° С‚СЂР°РЅСЃС„РѕСЂРјР°С‚РѕСЂРµ
     /// </summary>
     /// <returns></returns>
     public float getPower();
 
     /// <summary>
-    /// Обновляем трансформатору мощность его
+    /// РћР±РЅРѕРІР»СЏРµРј С‚СЂР°РЅСЃС„РѕСЂРјР°С‚РѕСЂСѓ РјРѕС‰РЅРѕСЃС‚СЊ РµРіРѕ
     /// </summary>
     /// <returns></returns>
     public void setPower(float power);
 
-
-
     /// <summary>
-    /// Обновляем Entity
+    /// РћР±РЅРѕРІР»СЏРµРј Entity
     /// </summary>
     public void Update();
-
 }
