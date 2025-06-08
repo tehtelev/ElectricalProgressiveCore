@@ -1016,7 +1016,7 @@ namespace ElectricalProgressive
         {
             var partPositions = new BlockPos[network.PartPositions.Count];
             network.PartPositions.CopyTo(partPositions);
-            network.version++; // Увеличиваем версию сети перед удалением
+            network.version++;                                              // Увеличиваем версию сети перед удалением
             this.networks.Remove(network);                                  //удаляем цепь из списка цепей
 
             foreach (var position in partPositions)                         //перебираем по всем бывшим элементам этой цепи
@@ -1091,6 +1091,7 @@ namespace ElectricalProgressive
                 {
                     foreach (var face in FacingHelper.Faces(addedConnections & directionFilter))
                     {
+                        // 1) Соединение своей грани face с противоположной гранью соседа
                         if ((neighborPart.Connection & FacingHelper.From(face, direction.Opposite)) != 0)
                         {
                             if (neighborPart.Networks[face.Index] is { } network)
@@ -1099,6 +1100,7 @@ namespace ElectricalProgressive
                             }
                         }
 
+                        // 2) Тоже, но наоборот
                         if ((neighborPart.Connection & FacingHelper.From(direction.Opposite, face)) != 0)
                         {
                             if (neighborPart.Networks[direction.Opposite.Index] is { } network)
@@ -1121,6 +1123,7 @@ namespace ElectricalProgressive
 
                     if (this.parts.TryGetValue(neighborPosition, out var neighborPart))
                     {
+                        // 1) Проверяем соединение через ребро direction–face
                         if ((neighborPart.Connection & FacingHelper.From(direction.Opposite, face.Opposite)) != 0)
                         {
                             if (neighborPart.Networks[direction.Opposite.Index] is { } network)
@@ -1129,6 +1132,7 @@ namespace ElectricalProgressive
                             }
                         }
 
+                        // 2) Тоже, но наоборот
                         if ((neighborPart.Connection & FacingHelper.From(face.Opposite, direction.Opposite)) != 0)
                         {
                             if (neighborPart.Networks[face.Opposite.Index] is { } network)
@@ -1139,6 +1143,43 @@ namespace ElectricalProgressive
                     }
                 }
             }
+
+            
+            //поиск соседа через грань
+            foreach (var direction in FacingHelper.Directions(addedConnections))
+            {
+                var directionFilter = FacingHelper.FromDirection(direction);
+
+                foreach (var face in FacingHelper.Faces(addedConnections & directionFilter))
+                {
+                    var neighborPosition = part.Position.AddCopy(face);
+
+                    if (this.parts.TryGetValue(neighborPosition, out var neighborPart))
+                    {
+                        if ((neighborPart.Connection & FacingHelper.From(direction, face.Opposite)) != 0)
+                        {
+                            if (neighborPart.Networks[direction.Index] is { } network)
+                            {
+                                networksByFace[face.Index].Add(network);
+                            }
+                        }
+
+                        if ((neighborPart.Connection & FacingHelper.From(face.Opposite, direction)) != 0)
+                        {
+                            if (neighborPart.Networks[face.Opposite.Index] is { } network)
+                            {
+                                networksByFace[face.Index].Add(network);
+                            }
+                        }
+
+                    }
+                }
+            }
+            
+
+
+
+
 
             foreach (var face in FacingHelper.Faces(part.Connection))
             {
