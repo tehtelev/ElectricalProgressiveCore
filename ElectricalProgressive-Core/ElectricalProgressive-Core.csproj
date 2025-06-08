@@ -11,6 +11,10 @@
             <HintPath>$(VINTAGE_STORY)/Lib/protobuf-net.dll</HintPath>
             <Private>False</Private>
         </Reference>
+      <Reference Include="Newtonsoft">
+        <HintPath>$(VINTAGE_STORY)/Lib/Newtonsoft.Json.dll</HintPath>
+        <Private>False</Private>
+      </Reference>
         <Reference Include="VintagestoryAPI">
             <HintPath>$(VINTAGE_STORY)/VintagestoryAPI.dll</HintPath>
             <Private>False</Private>
@@ -42,11 +46,6 @@
         <Content Include="modinfo.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
-    </ItemGroup>
-    <ItemGroup>
-      <PackageReference Include="Newtonsoft.Json" Version="13.0.3">
-        <IsPackable>false</IsPackable>
-      </PackageReference>      
     </ItemGroup>
     <ItemGroup>
       <Compile Update="Properties\Resources.Designer.cs">

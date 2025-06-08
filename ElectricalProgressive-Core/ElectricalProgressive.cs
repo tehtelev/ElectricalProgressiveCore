@@ -24,7 +24,7 @@ using System.Diagnostics;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Brings electricity into the game!",
-    Version = "1.0.3",
+    Version = "1.0.4",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
 
@@ -59,7 +59,7 @@ namespace ElectricalProgressive
 
         public readonly HashSet<Network> networks = new();
         private readonly Dictionary<BlockPos, NetworkPart> parts = new(); // Хранит все элементы всех цепей
-        public static bool combatoverhaul = false; // Установлен ли combatoverhaul
+
         public int speedOfElectricity; // Скорость электричества в проводах (блоков в тик)
         public bool instant; // Расчет мгновенно?
         private PathFinder pathFinder = new PathFinder(); // Модуль поиска путей
@@ -90,8 +90,7 @@ namespace ElectricalProgressive
 
             api.Event.RegisterGameTickListener(this.OnGameTick, tickTimeMs);
 
-            if (api.ModLoader.IsModEnabled("combatoverhaul"))
-                combatoverhaul = true;
+
         }
 
 
