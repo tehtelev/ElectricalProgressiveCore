@@ -1,43 +1,38 @@
-using Vintagestory.API.MathTools;
+п»їusing Vintagestory.API.MathTools;
 
 namespace ElectricalProgressive.Interface;
 
 public interface IElectricConsumer
 {
     /// <summary>
-    /// Координата аккумулятора
+    /// РљРѕРѕСЂРґРёРЅР°С‚Р° Р°РєРєСѓРјСѓР»СЏС‚РѕСЂР°
     /// </summary>
     public BlockPos Pos { get; }
+
     /// <summary>
-    /// Система запрашивает у потребителя сколько ей нужно в данный момент энергии
+    /// РЎРёСЃС‚РµРјР° Р·Р°РїСЂР°С€РёРІР°РµС‚ Сѓ РїРѕС‚СЂРµР±РёС‚РµР»СЏ СЃРєРѕР»СЊРєРѕ РµР№ РЅСѓР¶РЅРѕ РІ РґР°РЅРЅС‹Р№ РјРѕРјРµРЅС‚ СЌРЅРµСЂРіРёРё
     /// </summary>
     public float Consume_request();
 
     /// <summary>
-    /// Система выдает энергию потребителю 
+    /// РЎРёСЃС‚РµРјР° РІС‹РґР°РµС‚ СЌРЅРµСЂРіРёСЋ РїРѕС‚СЂРµР±РёС‚РµР»СЋ 
     /// </summary>
     public void Consume_receive(float amount);
 
-
     /// <summary>
-    /// Обновляем Entity
+    /// РћР±РЅРѕРІР»СЏРµРј Entity
     /// </summary>
     public void Update();
 
-
     /// <summary>
-    /// Сколько получает в данный момент потребитель
+    /// РЎРєРѕР»СЊРєРѕ РїРѕР»СѓС‡Р°РµС‚ РІ РґР°РЅРЅС‹Р№ РјРѕРјРµРЅС‚ РїРѕС‚СЂРµР±РёС‚РµР»СЊ
     /// </summary>
     /// <returns></returns>
     public float getPowerReceive();
 
-
     /// <summary>
-    /// Сколько требует в данный момент потребитель
+    /// РЎРєРѕР»СЊРєРѕ С‚СЂРµР±СѓРµС‚ РІ РґР°РЅРЅС‹Р№ РјРѕРјРµРЅС‚ РїРѕС‚СЂРµР±РёС‚РµР»СЊ
     /// </summary>
     /// <returns></returns>
     public float getPowerRequest();
-
-
-
 }
