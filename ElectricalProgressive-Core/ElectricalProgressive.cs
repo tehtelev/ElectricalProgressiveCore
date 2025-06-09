@@ -1110,18 +1110,15 @@ namespace ElectricalProgressive
                         }
                     }
                 }
-            }
 
-            //поиск соседей по ребрам
-            foreach (var direction in FacingHelper.Directions(addedConnections))
-            {
-                var directionFilter = FacingHelper.FromDirection(direction);
+                //поиск соседей по ребрам
+                directionFilter = FacingHelper.FromDirection(direction);
 
                 foreach (var face in FacingHelper.Faces(addedConnections & directionFilter))
                 {
-                    var neighborPosition = part.Position.AddCopy(direction).AddCopy(face);
+                    neighborPosition = part.Position.AddCopy(direction).AddCopy(face);
 
-                    if (this.parts.TryGetValue(neighborPosition, out var neighborPart))
+                    if (this.parts.TryGetValue(neighborPosition, out neighborPart))
                     {
                         // 1) Проверяем соединение через ребро direction–face
                         if ((neighborPart.Connection & FacingHelper.From(direction.Opposite, face.Opposite)) != 0)
@@ -1142,20 +1139,18 @@ namespace ElectricalProgressive
                         }
                     }
                 }
-            }
 
-            
-            //поиск соседа через грань
-            foreach (var direction in FacingHelper.Directions(addedConnections))
-            {
-                var directionFilter = FacingHelper.FromDirection(direction);
+
+                // ищем соседей по перпендикулярной грани
+                directionFilter = FacingHelper.FromDirection(direction);
 
                 foreach (var face in FacingHelper.Faces(addedConnections & directionFilter))
                 {
-                    var neighborPosition = part.Position.AddCopy(face);
+                    neighborPosition = part.Position.AddCopy(face);
 
-                    if (this.parts.TryGetValue(neighborPosition, out var neighborPart))
+                    if (this.parts.TryGetValue(neighborPosition, out neighborPart))
                     {
+                        // 1) Проверяем перпендикулярную грань соседа
                         if ((neighborPart.Connection & FacingHelper.From(direction, face.Opposite)) != 0)
                         {
                             if (neighborPart.Networks[direction.Index] is { } network)
@@ -1164,6 +1159,7 @@ namespace ElectricalProgressive
                             }
                         }
 
+                        // 2) Тоже, но наоборот
                         if ((neighborPart.Connection & FacingHelper.From(face.Opposite, direction)) != 0)
                         {
                             if (neighborPart.Networks[face.Opposite.Index] is { } network)
@@ -1175,6 +1171,8 @@ namespace ElectricalProgressive
                     }
                 }
             }
+
+
             
 
 

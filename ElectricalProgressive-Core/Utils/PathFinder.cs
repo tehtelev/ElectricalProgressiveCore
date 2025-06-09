@@ -244,104 +244,98 @@ public class PathFinder
         }
         hereConnections &= validConnectionsMask;
 
-        // ищем соседей по граням
+        // ищем соседей
         foreach (var direction in FacingHelper.Directions(hereConnections))
         {
+            // ищем соседей по граням
             var directionFilter = FacingHelper.FromDirection(direction);
             var neighborPosition = part.Position.AddCopy(direction);
 
-            if (!parts.TryGetValue(neighborPosition, out var neighborPart)) continue;
-            if (!networkPositions.Contains(neighborPosition)) continue;
+            if (parts.TryGetValue(neighborPosition, out var neighborPart))
+            {
+                foreach (var face in FacingHelper.Faces(hereConnections & directionFilter))
+                {
+                    var opposite = direction.Opposite;
+
+                    if ((neighborPart.Connection & FacingHelper.From(face, opposite)) != 0)
+                    {
+                        Neighbors.Add(neighborPosition);
+                        NeighborsFace.Add(face.Index);
+                        NowProcessed[face.Index] = true;
+                        processFaces[face.Index] = true;
+                    }
+
+                    if ((neighborPart.Connection & FacingHelper.From(opposite, face)) != 0)
+                    {
+                        Neighbors.Add(neighborPosition);
+                        NeighborsFace.Add(opposite.Index);
+                        NowProcessed[face.Index] = true;
+                        processFaces[face.Index] = true;
+                    }
+                }
+            }
+
+            // ищем соседей по ребрам
+            directionFilter = FacingHelper.FromDirection(direction);
 
             foreach (var face in FacingHelper.Faces(hereConnections & directionFilter))
             {
-                var opposite = direction.Opposite;
+                neighborPosition = part.Position.AddCopy(direction).AddCopy(face);
 
-                if ((neighborPart.Connection & FacingHelper.From(face, opposite)) != 0)
+                if (parts.TryGetValue(neighborPosition, out neighborPart))
                 {
-                    Neighbors.Add(neighborPosition);
-                    NeighborsFace.Add(face.Index);
-                    NowProcessed[face.Index] = true;
-                    processFaces[face.Index] = true;
-                }
+                    var oppDir = direction.Opposite;
+                    var oppFace = face.Opposite;
 
-                if ((neighborPart.Connection & FacingHelper.From(opposite, face)) != 0)
-                {
-                    Neighbors.Add(neighborPosition);
-                    NeighborsFace.Add(opposite.Index);
-                    NowProcessed[face.Index] = true;
-                    processFaces[face.Index] = true;
+                    if ((neighborPart.Connection & FacingHelper.From(oppDir, oppFace)) != 0)
+                    {
+                        Neighbors.Add(neighborPosition);
+                        NeighborsFace.Add(oppDir.Index);
+                        NowProcessed[face.Index] = true;
+                        processFaces[face.Index] = true;
+                    }
+
+                    if ((neighborPart.Connection & FacingHelper.From(oppFace, oppDir)) != 0)
+                    {
+                        Neighbors.Add(neighborPosition);
+                        NeighborsFace.Add(oppFace.Index);
+                        NowProcessed[face.Index] = true;
+                        processFaces[face.Index] = true;
+                    }
                 }
             }
-        }
 
-        // ищем соседей по ребрам
-        foreach (var direction in FacingHelper.Directions(hereConnections))
-        {
-            var directionFilter = FacingHelper.FromDirection(direction);
+
+            // ищем соседей по перпендикулярной грани
+            directionFilter = FacingHelper.FromDirection(direction);
 
             foreach (var face in FacingHelper.Faces(hereConnections & directionFilter))
             {
-                var neighborPosition = part.Position.AddCopy(direction).AddCopy(face);
+                neighborPosition = part.Position.AddCopy(face);
 
-                if (!parts.TryGetValue(neighborPosition, out var neighborPart)) continue;
-                if (!networkPositions.Contains(neighborPosition)) continue;
-
-                var oppDir = direction.Opposite;
-                var oppFace = face.Opposite;
-
-                if ((neighborPart.Connection & FacingHelper.From(oppDir, oppFace)) != 0 )
+                if (parts.TryGetValue(neighborPosition, out neighborPart))
                 {
-                    Neighbors.Add(neighborPosition);
-                    NeighborsFace.Add(oppDir.Index);
-                    NowProcessed[face.Index] = true;
-                    processFaces[face.Index] = true;
+                    var oppFace = face.Opposite;
+
+                    if ((neighborPart.Connection & FacingHelper.From(direction, oppFace)) != 0)
+                    {
+                        Neighbors.Add(neighborPosition);
+                        NeighborsFace.Add(direction.Index);
+                        NowProcessed[face.Index] = true;
+                        processFaces[face.Index] = true;
+                    }
+
+                    if ((neighborPart.Connection & FacingHelper.From(oppFace, direction)) != 0)
+                    {
+                        Neighbors.Add(neighborPosition);
+                        NeighborsFace.Add(oppFace.Index);
+                        NowProcessed[face.Index] = true;
+                        processFaces[face.Index] = true;
+                    }
                 }
 
-                if ((neighborPart.Connection & FacingHelper.From(oppFace, oppDir)) != 0)
-                {
-                    Neighbors.Add(neighborPosition);
-                    NeighborsFace.Add(oppFace.Index);
-                    NowProcessed[face.Index] = true;
-                    processFaces[face.Index] = true;
-                }
             }
         }
-
-
-        // ищем соседей по грани
-        foreach (var direction in FacingHelper.Directions(hereConnections))
-        {
-            var directionFilter = FacingHelper.FromDirection(direction);
-
-            foreach (var face in FacingHelper.Faces(hereConnections & directionFilter))
-            {
-                var neighborPosition = part.Position.AddCopy(face);
-
-                if (!parts.TryGetValue(neighborPosition, out var neighborPart)) continue;
-                if (!networkPositions.Contains(neighborPosition)) continue;
-
-                var oppFace = face.Opposite;
-
-                if ((neighborPart.Connection & FacingHelper.From(direction, oppFace)) != 0)
-                {
-                    Neighbors.Add(neighborPosition);
-                    NeighborsFace.Add(direction.Index);
-                    NowProcessed[face.Index] = true;
-                    processFaces[face.Index] = true;
-                }
-
-                if ((neighborPart.Connection & FacingHelper.From(oppFace, direction)) != 0)
-                {
-                    Neighbors.Add(neighborPosition);
-                    NeighborsFace.Add(oppFace.Index);
-                    NowProcessed[face.Index] = true;
-                    processFaces[face.Index] = true;
-                }
-            }
-        }
-
-
 
 
 
