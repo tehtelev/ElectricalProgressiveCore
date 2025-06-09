@@ -586,7 +586,7 @@ namespace ElectricalProgressive
 
                 // Этап 10: Обновление статистики сети ----------------------------------------------------------------------------
 
-                // Расчет Consumption
+                // Расчет потребления
                 float consumption = 0f;
                 foreach (var consumer in consumers)
                 {
@@ -600,7 +600,7 @@ namespace ElectricalProgressive
 
                 network.Consumption = consumption;
 
-                // Расчет Production
+                // Расчет производства
                 float production = 0f;
                 foreach (var producer in producers)
                 {
@@ -608,13 +608,14 @@ namespace ElectricalProgressive
                 }
                 network.Production = production;
 
-                // Расчет Lack
-                float lackSum = 0f;
+                // Расчет необходимой энергии для сети
+                float requestSum = 0f;
                 foreach (var consumer in consumers)
                 {
-                    lackSum += consumer.ElectricConsumer.getPowerRequest() - consumer.ElectricConsumer.getPowerReceive();
+                    requestSum += consumer.ElectricConsumer.getPowerRequest();
                 }
-                network.Lack = Math.Max(lackSum, 0f);
+
+                network.Request = Math.Max(requestSum, 0f);
 
                 // Обновление компонентов
                 foreach (var electricTransformator in network.Transformators)
@@ -1430,7 +1431,7 @@ namespace ElectricalProgressive
                     result.Production += network.Production;
                     result.Consumption += network.Consumption;
                     result.Overflow += network.Overflow;
-                    result.Lack += network.Lack;
+                    result.Request += network.Request;
                 }
             }
 
@@ -1611,7 +1612,7 @@ namespace ElectricalProgressive
         public float Consumption; //Потребление
         public float Overflow;    //Переполнение
         public float Production;  //Генерация
-        public float Lack;        //Недостаток
+        public float Request;        //Недостаток
         public int version; // Версия сети, для отслеживания изменений
 
     }
@@ -1646,7 +1647,7 @@ namespace ElectricalProgressive
         public float Consumption;
         public float Overflow;
         public float Production;
-        public float Lack;
+        public float Request;
         public Facing Facing = Facing.None;
         public int NumberOfAccumulators;
         public int NumberOfBlocks;
