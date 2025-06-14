@@ -712,44 +712,60 @@ namespace ElectricalProgressive
                         currentFacingFrom = packet.facingFrom[curIndex];
 
                         if (parts.TryGetValue(nextPos, out nextPart!) &&
-                            parts.TryGetValue(currentPos, out currentPart!) &&
-                            nextPart.Connection.HasFlag(packet.usedConnections[curIndex - 1]) &&
-                            !nextPart.eparams[packet.facingFrom[curIndex - 1]].burnout)
+                            parts.TryGetValue(currentPos, out currentPart!))
                         {
-
-
-                            // считаем сопротивление
-                            resistance = currentPart.eparams[currentFacingFrom].resisitivity /
-                                               (currentPart.eparams[currentFacingFrom].lines *
-                                                currentPart.eparams[currentFacingFrom].crossArea);
-
-                            // Провод в изоляции теряет меньше энергии
-                            if (currentPart.eparams[currentFacingFrom].isolated)
-                                resistance /= 2.0f;
-
-                            // считаем ток по закону Ома
-                            current = packet.energy / packet.voltage;
-
-                            // считаем потерю энергии по закону Джоуля
-                            lossEnergy = current * current * resistance;
-                            packet.energy = Math.Max(packet.energy - lossEnergy, 0);
-
-                            // пересчитаем ток уже с учетом потерь
-                            current = packet.energy / packet.voltage;
-
-                            // пакет не бесполезен
-                            if (packet.energy > 0.001f)
+                            if (!nextPart.eparams[packet.facingFrom[curIndex - 1]].burnout)
                             {
 
-                                packet.currentIndex--; // уменьшаем индекс пакета
 
-                                
-                                int j = 0;
-                                foreach (var face in packet.nowProcessedFaces.Last())
+                                if ((nextPart.Connection & packet.usedConnections[curIndex - 1]) != 0)
                                 {
-                                    if (face)
-                                        nextPart.current[j] += current;
-                                    j++;
+                                    // считаем сопротивление
+                                    resistance = currentPart.eparams[currentFacingFrom].resisitivity /
+                                                       (currentPart.eparams[currentFacingFrom].lines *
+                                                        currentPart.eparams[currentFacingFrom].crossArea);
+
+                                    // Провод в изоляции теряет меньше энергии
+                                    if (currentPart.eparams[currentFacingFrom].isolated)
+                                        resistance /= 2.0f;
+
+                                    // считаем ток по закону Ома
+                                    current = packet.energy / packet.voltage;
+
+                                    // считаем потерю энергии по закону Джоуля
+                                    lossEnergy = current * current * resistance;
+                                    packet.energy = Math.Max(packet.energy - lossEnergy, 0);
+
+                                    // пересчитаем ток уже с учетом потерь
+                                    current = packet.energy / packet.voltage;
+
+                                    // пакет не бесполезен
+                                    if (packet.energy > 0.001f)
+                                    {
+
+                                        packet.currentIndex--; // уменьшаем индекс пакета
+
+
+                                        int j = 0;
+                                        foreach (var face in packet.nowProcessedFaces.Last())
+                                        {
+                                            if (face)
+                                                nextPart.current[j] += current;
+                                            j++;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        globalEnergyPackets.RemoveAt(i);
+                                    }
+                                }
+                                else
+                                {
+                                    // если все же путь не совпадает с путем в пакете, то чистим кэши
+                                    PathCacheManager.RemoveAll(packet.path[0], packet.path.Last());
+
+                                    globalEnergyPackets.RemoveAt(i);
+
                                 }
                             }
                             else
@@ -759,7 +775,11 @@ namespace ElectricalProgressive
                         }
                         else
                         {
+                            // если все же части сети не найдены, то тут точно кэш надо утилизировать
+                            PathCacheManager.RemoveAll(packet.path[0], packet.path.Last());
+
                             globalEnergyPackets.RemoveAt(i);
+
                         }
 
                     }

@@ -46,6 +46,23 @@ namespace ElectricalProgressive.Utils
             OpacityEvolve = new EvolvingNatFloat(EnumTransformFunction.LINEAR, -100)
         };
 
+        // шаблон «белого дыма»
+        private static readonly SimpleParticleProperties WhiteSmokeTemplate = new SimpleParticleProperties(
+            minQuantity: 1, maxQuantity: 1,
+            color: ColorUtil.ColorFromRgba(210, 210, 210, 200),
+            minPos: new Vec3d(-0.1, -0.1, -0.1), maxPos: new Vec3d(0.1, 0.1, 0.1),
+            minVelocity: new Vec3f(0f, 0.1f, 0f), maxVelocity: new Vec3f(0.1f, 0.2f, 0.1f)
+        )
+        {
+            WindAffected = true,
+            LifeLength = 2f,
+            GravityEffect = -0.02f,
+            ParticleModel = EnumParticleModel.Quad,
+            SizeEvolve = new EvolvingNatFloat(EnumTransformFunction.LINEAR, 1f),
+            OpacityEvolve = new EvolvingNatFloat(EnumTransformFunction.LINEAR, -100)
+        };
+
+
         // метод для спавна искр в точке pos
         public static void SpawnElectricSparks(IWorldAccessor world, Vec3d pos)
         {
@@ -53,11 +70,18 @@ namespace ElectricalProgressive.Utils
             world.SpawnParticles(SparksTemplate);
         }
 
-        // метод для спавна дыма в точке pos
+        // метод для спавна черного дыма в точке pos
         public static void SpawnBlackSmoke(IWorldAccessor world, Vec3d pos)
         {
             SmokeTemplate.MinPos = pos;
             world.SpawnParticles(SmokeTemplate);
+        }
+
+        // метод для спавна белого дыма в точке pos
+        public static void SpawnWhiteSmoke(IWorldAccessor world, Vec3d pos)
+        {
+            WhiteSmokeTemplate.MinPos = pos;
+            world.SpawnParticles(WhiteSmokeTemplate);
         }
     }
 }

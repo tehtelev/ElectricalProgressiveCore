@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using Vintagestory.API.MathTools;
 
 namespace ElectricalProgressive.Utils
@@ -90,5 +91,33 @@ namespace ElectricalProgressive.Utils
                 }
             }
         }
+
+
+
+        /// <summary>
+        /// Принудительно удаляет из кэша все записи для указанных координат start и end
+        /// независимо от версии.
+        /// </summary>
+        public static void RemoveAll(BlockPos start, BlockPos end)
+        {
+            // Собираем ключи, которые нужно удалить, чтобы не модифицировать
+            // словарь прямо во время перебора.
+            var keysToRemove = new List<(BlockPos, BlockPos, int)>();
+            foreach (var kvp in cache)
+            {
+                var key = kvp.Key;
+                if (key.Item1.Equals(start) && key.Item2.Equals(end))
+                {
+                    keysToRemove.Add(key);
+                }
+            }
+
+            // Удаляем все собранные ключи
+            foreach (var key in keysToRemove)
+            {
+                cache.TryRemove(key, out _);
+            }
+        }
+
     }
 }
