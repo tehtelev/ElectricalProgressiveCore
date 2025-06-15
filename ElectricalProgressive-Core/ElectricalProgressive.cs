@@ -24,7 +24,7 @@ using System.Diagnostics;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Brings electricity into the game!",
-    Version = "1.0.4",
+    Version = "1.0.5",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
 
