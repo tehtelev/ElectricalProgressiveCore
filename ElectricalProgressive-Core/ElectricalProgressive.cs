@@ -24,7 +24,7 @@ using System.Diagnostics;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Brings electricity into the game!",
-    Version = "1.0.5",
+    Version = "1.0.6",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
 
@@ -335,10 +335,8 @@ namespace ElectricalProgressive
         /// <param name="_"></param>
         private void OnGameTick(float _)
         {
-            //int ticks = instant ? 1 : speedOfElectricity;
 
-
-            //clean old path cache entries
+            //Очищаем старые пути
             if (api.World.Rand.NextDouble() < 0.1d)
             {
                 PathCacheManager.Cleanup();
@@ -510,7 +508,6 @@ namespace ElectricalProgressive
                 }
 
 
-
                 // Этап 8: Распределение энергии для аккумуляторов ----------------------------------------------------------------------------
                 sim2.Reset();            // Сбрасываем состояние симуляции
                 logisticalTask(network, ref consumer2Positions, ref consumer2Requests, ref producer2Positions, ref producer2Give, ref sim2);
@@ -586,21 +583,26 @@ namespace ElectricalProgressive
 
                 // Этап 10: Обновление статистики сети ----------------------------------------------------------------------------
 
-                // Расчет потребления
+                // Расчет потребления (только потребителями)
                 float consumption = 0f;
-                foreach (var consumer in consumers)
+
+                // потребление в первой симуляции
+                foreach (var customer in sim.Customers)
                 {
-                    consumption += consumer.ElectricConsumer.getPowerReceive();
+                    foreach (var store in sim.Stores)
+                    {
+                        if (customer.Received.TryGetValue(store, out var value))
+                        {
+                            consumption += value;
+                        }
+                    }
                 }
 
-                foreach (var accum in accums)
-                {
-                    consumption += Math.Max(accum.ElectricAccum.GetCapacity() - accum.ElectricAccum.GetLastCapacity(), 0f);
-                }
 
                 network.Consumption = consumption;
 
-                // Расчет производства
+
+                // Расчет производства (чистая генерация генераторами)
                 float production = 0f;
                 foreach (var producer in producers)
                 {
@@ -608,7 +610,8 @@ namespace ElectricalProgressive
                 }
                 network.Production = production;
 
-                // Расчет необходимой энергии для сети
+
+                // Расчет необходимой энергии для потребителей!
                 float requestSum = 0f;
                 foreach (var consumer in consumers)
                 {
@@ -617,16 +620,25 @@ namespace ElectricalProgressive
 
                 network.Request = Math.Max(requestSum, 0f);
 
+
                 // Обновление компонентов
                 foreach (var electricTransformator in network.Transformators)
                 {
                     transformators.Add(new Transformator(electricTransformator));
                 }
 
+                float capacity = 0f; // Суммарная емкость сети
+                float maxCapacity = 0f; // Максимальная емкость сети
+
                 foreach (var a in accums)
                 {
                     a.ElectricAccum.Update();
+                    capacity+=a.ElectricAccum.GetCapacity();
+                    maxCapacity+= a.ElectricAccum.GetMaxCapacity();
                 }
+
+                network.Capacity = capacity;
+                network.MaxCapacity = maxCapacity;
 
                 foreach (var p in producers)
                 {
@@ -1450,7 +1462,8 @@ namespace ElectricalProgressive
                     result.NumberOfTransformators += network.Transformators.Count;
                     result.Production += network.Production;
                     result.Consumption += network.Consumption;
-                    result.Overflow += network.Overflow;
+                    result.Capacity += network.Capacity;
+                    result.MaxCapacity += network.MaxCapacity;
                     result.Request += network.Request;
                 }
             }
@@ -1630,10 +1643,11 @@ namespace ElectricalProgressive
         public readonly HashSet<IElectricTransformator> Transformators = new();  //Трансформаторы
         public readonly HashSet<BlockPos> PartPositions = new();     //Координаты позиций сети
         public float Consumption; //Потребление
-        public float Overflow;    //Переполнение
+        public float Capacity;    //Емкость батарей
+        public float MaxCapacity; //Максимальная емкость батарей
         public float Production;  //Генерация
-        public float Request;        //Недостаток
-        public int version; // Версия сети, для отслеживания изменений
+        public float Request;     //Недостаток
+        public int version;       // Версия сети, для отслеживания изменений
 
     }
 
@@ -1665,7 +1679,8 @@ namespace ElectricalProgressive
     public class NetworkInformation
     {
         public float Consumption;
-        public float Overflow;
+        public float Capacity;    //Емкость батарей
+        public float MaxCapacity; //Максимальная емкость батарей
         public float Production;
         public float Request;
         public Facing Facing = Facing.None;
