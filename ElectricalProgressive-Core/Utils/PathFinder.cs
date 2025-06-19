@@ -33,6 +33,11 @@ public class PathFinder
             startBlockFacing.Add(face.Index);
         }
 
+
+        // startBlockFacing[0] и endBlockFacing[0] будут работать корректно до тех пор пока не появятся источники и приемники энергии, у которых несколько граней на передачу и прием!!!!
+
+
+
         //смотрим с какой грани заканчивать
         var endConnection = parts[end].Connection;
         var endBlockFacing = new List<int>();
@@ -74,7 +79,7 @@ public class PathFinder
         }
 
         bool first = true;                      //маркер для первого прохода
-                                           
+
         List<BlockPos> buf1;     //список соседей
         List<int> buf2;          //список граней соседей
         bool[] buf3;            //список граней, которые сейчас в работе
@@ -124,37 +129,66 @@ public class PathFinder
 
         var (path, faces) = ReconstructPath(start, end, endBlockFacing[0], cameFrom);    //реконструкция маршрута
 
-        Facing[] nowProcessingFaces=null!;      //храним тут Facing граней, которые сейчас в работе                                           
+        Facing[] nowProcessingFaces = null!;      //храним тут Facing граней, которые сейчас в работе                                           
         bool[][] nowProcessedFacesList = null!; //хранит для каждого кусочка цепи посещенные грани в данный момент (для вывода наружу)                                                
         int[] facingFromList = null!;            //хранит номер задействованной грани соседа (для вывода наружу)
 
+
+        // ниже можно код сделать компактнее, но потом
         if (path != null)
         {
-            bool[] npf;    
+            bool[] npf;
             Facing facing;
-            nowProcessingFaces = new Facing[path.Count()]; 
-            nowProcessedFacesList = new bool[path.Count()][];
-            facingFromList = new int[path.Count()];
+            int pathLength = path.Count(); //длина пути
+            nowProcessingFaces = new Facing[pathLength];
+            nowProcessedFacesList = new bool[pathLength][];
+            facingFromList = new int[pathLength];
 
-            for (int i = 0; i < path.Count(); i++)                                //подготавливаем дополнительные данные
+            facingFromList[0] = facingFrom[(path[0], faces[0])];
+
+            for (int i = 1; i < pathLength; i++)                                //подготавливаем дополнительные данные
             {
-                facingFromList[i]=facingFrom[(path[i], faces[i])];
+                facingFromList[i] = facingFrom[(path[i], faces[i])];
+                // первый элемент не добавляем
 
                 npf = nowProcessedFaces[(path[i], faces[i])];
 
-                nowProcessedFacesList[i]= npf;
+                nowProcessedFacesList[i-1]=npf;
 
                 //фильтруем только нужные грани
-                facing = parts[path[i]].Connection &
-                    ( (npf[0] ? Facing.NorthAll : Facing.None)
+                facing = parts[path[i-1]].Connection &
+                    ((npf[0] ? Facing.NorthAll : Facing.None)
                     | (npf[1] ? Facing.EastAll : Facing.None)
                     | (npf[2] ? Facing.SouthAll : Facing.None)
                     | (npf[3] ? Facing.WestAll : Facing.None)
                     | (npf[4] ? Facing.UpAll : Facing.None)
                     | (npf[5] ? Facing.DownAll : Facing.None));
 
-                nowProcessingFaces[i]=facing;
+                nowProcessingFaces[i - 1] = facing;
+
+
             }
+
+            // последний элемент
+
+            npf = new bool[6] { false, false, false, false, false, false };
+            npf[endBlockFacing[0]] = true; //маркер, что мы закончили этой гранью
+
+            nowProcessedFacesList[pathLength -1] = npf;
+
+            //фильтруем только нужные грани
+            facing = parts[path[pathLength - 1]].Connection &
+                ((npf[0] ? Facing.NorthAll : Facing.None)
+                | (npf[1] ? Facing.EastAll : Facing.None)
+                | (npf[2] ? Facing.SouthAll : Facing.None)
+                | (npf[3] ? Facing.WestAll : Facing.None)
+                | (npf[4] ? Facing.UpAll : Facing.None)
+                | (npf[5] ? Facing.DownAll : Facing.None));
+
+            nowProcessingFaces[pathLength - 1] = facing;
+
+
+
         }
 
 

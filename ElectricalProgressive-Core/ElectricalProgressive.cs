@@ -691,7 +691,7 @@ namespace ElectricalProgressive
                         if (parts.TryGetValue(pos, out var part2))
                         {
                             bool isValid = false;
-                            // Ручная проверка условий вместо LINQ
+                            // Ручная проверка условий 
                             foreach (var s in part2.eparams)
                             {
                                 if (s.voltage > 0 && !s.burnout && packet.voltage >= s.voltage)
