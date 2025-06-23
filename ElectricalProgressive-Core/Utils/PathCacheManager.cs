@@ -6,7 +6,7 @@ using Vintagestory.API.MathTools;
 namespace ElectricalProgressive.Utils
 {
     /// <summary>
-    /// A global, network‐independent path cache with TTL-based eviction.
+    /// Глобальный, не зависящий от сети кэш путей с удалением по TTL.
     /// </summary>
     public static class PathCacheManager
     {
@@ -19,15 +19,15 @@ namespace ElectricalProgressive.Utils
             public DateTime LastAccessed;
         }
 
-        // TTL after which unused entries are removed
+        // TTL, по истечении которого неиспользуемые записи удаляются
         private static readonly TimeSpan EntryTtl = TimeSpan.FromMinutes(1);
 
-        // The actual cache keyed only by (start, end)
+        // Сам кэш, ключом служит только (start, end, version)
         private static readonly ConcurrentDictionary<(BlockPos, BlockPos, int), Entry> cache
             = new ConcurrentDictionary<(BlockPos, BlockPos, int), Entry>();
 
         /// <summary>
-        /// Attempt to retrieve a cached path.
+        /// Попытаться получить путь из кэша.
         /// </summary>
         public static bool TryGet(
             BlockPos start, BlockPos end, int currentVersion,
@@ -37,7 +37,7 @@ namespace ElectricalProgressive.Utils
             out Facing[] usedConnections)
         {
             var key = (start, end, currentVersion);
-            if (cache.TryGetValue(key, out var entry) )
+            if (cache.TryGetValue(key, out var entry))
             {
                 entry.LastAccessed = DateTime.UtcNow;
                 path = entry.Path;
@@ -55,7 +55,7 @@ namespace ElectricalProgressive.Utils
         }
 
         /// <summary>
-        /// Store a newly computed path in the cache (or update existing).
+        /// Сохранить в кэше новый вычисленный путь (или обновить существующий).
         /// </summary>
         public static void AddOrUpdate(
             BlockPos start, BlockPos end, int currentVersion,
@@ -77,8 +77,8 @@ namespace ElectricalProgressive.Utils
         }
 
         /// <summary>
-        /// Remove all entries not accessed within the TTL.
-        /// Call periodically (e.g. once per second or every N ticks).
+        /// Удалить все записи, к которым не обращались в течение TTL.
+        /// Вызывать периодически (например, раз в секунду или каждые N тиков).
         /// </summary>
         public static void Cleanup()
         {
@@ -96,7 +96,7 @@ namespace ElectricalProgressive.Utils
 
         /// <summary>
         /// Принудительно удаляет из кэша все записи для указанных координат start и end
-        /// независимо от версии.
+        /// независимо от version.
         /// </summary>
         public static void RemoveAll(BlockPos start, BlockPos end)
         {

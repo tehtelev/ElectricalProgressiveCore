@@ -24,9 +24,11 @@ using System.Diagnostics;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Brings electricity into the game!",
-    Version = "1.0.6",
+    Version = "1.1.0",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
+
+
 
 namespace ElectricalProgressive
 {
@@ -62,6 +64,7 @@ namespace ElectricalProgressive
 
         public int speedOfElectricity; // Скорость электричества в проводах (блоков в тик)
         public bool instant; // Расчет мгновенно?
+
         private PathFinder pathFinder = new PathFinder(); // Модуль поиска путей
         public ICoreAPI api = null!;
         private ICoreClientAPI capi = null!;
@@ -890,7 +893,7 @@ namespace ElectricalProgressive
                         }
 
 
-                        int transformatorFaceIndex = 5; // Индекс грани трансформатора!!!
+                        int transformatorFaceIndex = FacingHelper.GetFaceIndex(FacingHelper.FromFace(FacingHelper.Faces(part.Connection).First())); // Индекс грани трансформатора!
 
                         part.current[transformatorFaceIndex] = totalCurrent;
 
@@ -1472,225 +1475,6 @@ namespace ElectricalProgressive
         }
 
 
-    }
-
-
-
-
-
-
-
-
-
-    /// <summary>
-    /// Сам пакет с энергией
-    /// </summary>
-    public class EnergyPacket
-    {
-        /// <summary>
-        /// Энергия, которая движется в этом пакете.
-        /// </summary>
-        public float energy;
-
-        /// <summary>
-        /// Напряжение, с которым движется энергия.
-        /// </summary>
-        public int voltage;
-
-        /// <summary>
-        /// Текущий индекс в пути, где сейчас пакет
-        /// </summary>
-        public int currentIndex = -1;
-
-        /// <summary>
-        /// Последовательность позиций по которой движется энергия.
-        /// </summary>
-        public readonly BlockPos[] path;
-
-        /// <summary>
-        /// Откуда мы пришли в каждой точке пути.
-        /// </summary>
-        public readonly int[] facingFrom;
-
-        /// <summary>
-        /// Какие грани каждого блока уже обработаны.
-        /// </summary>
-        public readonly bool[][] nowProcessedFaces;
-
-        /// <summary>
-        /// Через какие соединения шёл ток.
-        /// </summary>
-        public readonly Facing[] usedConnections;
-
-        /// <summary>
-        /// Создаёт пакет, просто сохраняя ссылки на массивы из кэша.
-        /// </summary>
-        public EnergyPacket(
-            float Energy,
-            int Voltage,
-            int CurrentIndex,
-            BlockPos[] Path,
-            int[] FacingFrom,
-            bool[][] NowProcessedFaces,
-            Facing[] UsedConnections
-        )
-        {
-            // Никаких Clone() — храним ссылку на кэшированные данные:
-            energy = Energy;
-            voltage = Voltage;
-            currentIndex = CurrentIndex;
-            path = Path;
-            facingFrom = FacingFrom;
-            nowProcessedFaces = NowProcessedFaces;
-            usedConnections = UsedConnections;
-        }
-
-
-    }
-
-
-
-
-
-    /// <summary>
-    /// Параметры проводов/приборов как участников электрической цепи
-    /// </summary>
-    public struct EParams : IEquatable<EParams>
-    {
-        public int voltage;         //напряжение
-        public float maxCurrent;    //максимальный ток
-        public string material;     //индекс материала
-        public float resisitivity;  //удельное сопротивление
-        public byte lines;          //количество линий
-        public float crossArea;     //площадь поперечного сечения
-        public bool burnout;        //провод сгорел
-        public bool isolated;       //изолированный проводник
-        public bool isolatedEnvironment; //изолированный от окружающей среды проводник
-
-        public EParams(int voltage, float maxCurrent, string material, float resisitivity, byte lines, float crossArea, bool burnout, bool isolated, bool isolatedEnvironment)
-        {
-            this.voltage = voltage;
-            this.maxCurrent = maxCurrent;
-            this.material = material;
-            this.resisitivity = resisitivity;
-            this.lines = lines;
-            this.crossArea = crossArea;
-            this.burnout = burnout;
-            this.isolated = isolated;
-            this.isolatedEnvironment = isolatedEnvironment;
-        }
-
-        public EParams()
-        {
-            this.voltage = 0;
-            this.maxCurrent = 0.0F;
-            this.material = "";
-            this.resisitivity = 0.0F;
-            this.lines = 0;
-            this.crossArea = 0.0F;
-            this.burnout = false;
-            this.isolated = false;
-            this.isolatedEnvironment = true;
-        }
-
-
-        public bool Equals(EParams other)
-        {
-            return voltage == other.voltage &&
-                   maxCurrent.Equals(other.maxCurrent) &&
-                   material == other.material &&
-                   resisitivity.Equals(other.resisitivity) &&
-                   lines == other.lines &&
-                   crossArea.Equals(other.crossArea) &&
-                   burnout == other.burnout &&
-                   isolated == other.isolated &&
-                   isolatedEnvironment == other.isolatedEnvironment;
-        }
-
-        public override bool Equals(object? obj)
-        {
-            return obj is EParams other && Equals(other);
-        }
-
-        public override int GetHashCode()
-        {
-            unchecked
-            {
-                int hash = 17;
-                hash = hash * 31 + voltage;
-                hash = hash * 31 + maxCurrent.GetHashCode();
-                hash = hash * 31 + material.GetHashCode();
-                hash = hash * 31 + resisitivity.GetHashCode();
-                hash = hash * 31 + lines;
-                hash = hash * 31 + crossArea.GetHashCode();
-                hash = hash * 31 + burnout.GetHashCode();
-                hash = hash * 31 + isolated.GetHashCode();
-                hash = hash * 31 + isolatedEnvironment.GetHashCode();
-                return hash;
-            }
-        }
-    }
-
-
-    /// <summary>
-    /// Сеть
-    /// </summary>
-    public class Network
-    {
-        public readonly HashSet<IElectricAccumulator> Accumulators = new();  //Аккумуляторы
-        public readonly HashSet<IElectricConsumer> Consumers = new();       //Потребители
-        public readonly HashSet<IElectricProducer> Producers = new();           //Генераторы
-        public readonly HashSet<IElectricTransformator> Transformators = new();  //Трансформаторы
-        public readonly HashSet<BlockPos> PartPositions = new();     //Координаты позиций сети
-        public float Consumption; //Потребление
-        public float Capacity;    //Емкость батарей
-        public float MaxCapacity; //Максимальная емкость батарей
-        public float Production;  //Генерация
-        public float Request;     //Недостаток
-        public int version;       // Версия сети, для отслеживания изменений
-
-    }
-
-    /// <summary>
-    /// Часть сети
-    /// </summary>
-    public class NetworkPart
-    {
-        public readonly Network?[] Networks = new Network?[6];
-        public EParams[] eparams = new EParams[] { };
-        public float[] current = new float[6];
-        public readonly BlockPos Position;
-        public Facing Connection = Facing.None;
-        public IElectricAccumulator? Accumulator;
-        public IElectricConsumer? Consumer;
-        public IElectricProducer? Producer;
-        public IElectricTransformator? Transformator;
-
-        public NetworkPart(BlockPos position)
-        {
-            Position = position;
-        }
-    }
-
-
-    /// <summary>
-    /// Сборщик информации о сети
-    /// </summary>
-    public class NetworkInformation
-    {
-        public float Consumption;
-        public float Capacity;    //Емкость батарей
-        public float MaxCapacity; //Максимальная емкость батарей
-        public float Production;
-        public float Request;
-        public Facing Facing = Facing.None;
-        public int NumberOfAccumulators;
-        public int NumberOfBlocks;
-        public int NumberOfConsumers;
-        public int NumberOfProducers;
-        public int NumberOfTransformators;
-        public EParams eParamsInNetwork = new();
-        public float current;
     }
 
     /// <summary>
