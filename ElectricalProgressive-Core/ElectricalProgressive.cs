@@ -636,8 +636,8 @@ namespace ElectricalProgressive
                 foreach (var a in accums)
                 {
                     a.ElectricAccum.Update();
-                    capacity+=a.ElectricAccum.GetCapacity();
-                    maxCapacity+= a.ElectricAccum.GetMaxCapacity();
+                    capacity += a.ElectricAccum.GetCapacity();
+                    maxCapacity += a.ElectricAccum.GetMaxCapacity();
                 }
 
                 network.Capacity = capacity;
@@ -762,7 +762,7 @@ namespace ElectricalProgressive
 
 
                                         int j = 0;
-                                        foreach (var face in packet.nowProcessedFaces.Last())
+                                        foreach (var face in packet.nowProcessedFaces[packet.currentIndex])
                                         {
                                             if (face)
                                                 nextPart.current[j] += current;
@@ -1209,7 +1209,7 @@ namespace ElectricalProgressive
             }
 
 
-            
+
 
 
 
@@ -1437,38 +1437,72 @@ namespace ElectricalProgressive
         /// <summary>
         /// Cобирает информацию по цепи
         /// </summary>
-        public NetworkInformation GetNetworks(BlockPos position, Facing facing)
+        /// <param name="position"></param>
+        /// <param name="facing"></param>
+        /// <param name="method">Метод вывода с какой грани "thisFace"- эту грань, "firstFace"- информация о первой грани из многих, "currentFace" - информация о грани, в которой ток больше 0</param>
+        /// <returns></returns>
+        public NetworkInformation GetNetworks(BlockPos position, Facing facing, string method="thisFace")
         {
-            var result = new NetworkInformation();
+            var result = new NetworkInformation(); // результат вываливается сюда
 
             if (this.parts.TryGetValue(position, out var part))
             {
-                var networks = new HashSet<Network>();
+                Network network = null!;
 
-                foreach (var blockFacing in FacingHelper.Faces(facing))
+                if (method == "thisFace" || method == "firstFace") // пока так, возможно потом по-разному будет обработка
                 {
-                    if (part.Networks[blockFacing.Index] is { } networkk)
+                    var blockFacing = FacingHelper.Faces(facing).First();
+
+                    if (part.Networks[blockFacing.Index] is { } net)
                     {
-                        networks.Add(networkk);                                     //выдаем найденную цепь
+                        network = net;                                              //выдаем найденную цепь
                         result.Facing |= FacingHelper.FromFace(blockFacing);        //выдаем ее направления
-                        result.eParamsInNetwork = part.eparams[blockFacing.Index];                     //выдаем ее текущие параметры
-                        result.current = part.current[blockFacing.Index];
+                        result.eParamsInNetwork = part.eparams[blockFacing.Index];  //выдаем ее текущие параметры
+                        result.current = part.current[blockFacing.Index];           //выдаем текущий ток в этой грани
                     }
+                    else
+                        return result;
+                }
+                else if (method == "currentFace") // если ток больше нуля, то выдаем информацию о грани, в которой ток больше нуля
+                {
+                    var searchIndex = 0;
+                    BlockFacing blockFacing = null!;
+
+                    foreach (BlockFacing blockFacing2 in FacingHelper.Faces(facing))
+                    {
+                        if (part.Networks[blockFacing2.Index] is { } networkk && part.current[blockFacing2.Index]>0.0F)
+                        {
+                            blockFacing = blockFacing2;
+                            searchIndex = blockFacing2.Index;
+                        }
+                    }
+
+                    if (part.Networks[searchIndex] is { } net)
+                    {
+                        network = net;                                              //выдаем найденную цепь
+                        result.Facing |= FacingHelper.FromFace(blockFacing);        //выдаем ее направления
+                        result.eParamsInNetwork = part.eparams[searchIndex];  //выдаем ее текущие параметры
+                        result.current = part.current[searchIndex];           //выдаем текущий ток в этой грани
+                    }
+                    else
+                        return result;
                 }
 
-                foreach (var network in networks)
-                {
-                    result.NumberOfBlocks += network.PartPositions.Count;
-                    result.NumberOfConsumers += network.Consumers.Count;
-                    result.NumberOfProducers += network.Producers.Count;
-                    result.NumberOfAccumulators += network.Accumulators.Count;
-                    result.NumberOfTransformators += network.Transformators.Count;
-                    result.Production += network.Production;
-                    result.Consumption += network.Consumption;
-                    result.Capacity += network.Capacity;
-                    result.MaxCapacity += network.MaxCapacity;
-                    result.Request += network.Request;
-                }
+
+
+
+                // Если нашли сеть, то заполняем информацию о ней
+                result.NumberOfBlocks = network.PartPositions.Count;
+                result.NumberOfConsumers = network.Consumers.Count;
+                result.NumberOfProducers = network.Producers.Count;
+                result.NumberOfAccumulators = network.Accumulators.Count;
+                result.NumberOfTransformators = network.Transformators.Count;
+                result.Production = network.Production;
+                result.Consumption = network.Consumption;
+                result.Capacity = network.Capacity;
+                result.MaxCapacity = network.MaxCapacity;
+                result.Request = network.Request;
+
             }
 
             return result;
