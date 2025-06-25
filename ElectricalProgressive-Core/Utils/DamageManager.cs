@@ -283,7 +283,7 @@ namespace ElectricalProgressive.Utils
             bool isRaining = heightRain > 0
                 && heightRain <= part.Position.Y + Y
                 && precip > 0.1f;
-               // && api.World.Rand.NextDouble() < 0.05f;
+
 
 
 
@@ -294,7 +294,7 @@ namespace ElectricalProgressive.Utils
             void Burnout(int i, ref NetworkPart part)
             {
                 part.eparams[i].burnout = true;
-
+                part.eparams[i].causeBurnout= 3;
             }
 
             /* сильно увеличивает нагрузку 

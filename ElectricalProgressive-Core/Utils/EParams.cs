@@ -10,24 +10,26 @@ namespace ElectricalProgressive.Utils
         public int voltage;         //напряжение
         public float maxCurrent;    //максимальный ток
         public string material;     //индекс материала
-        public float resisitivity;  //удельное сопротивление
+        public float resistivity;  //удельное сопротивление
         public byte lines;          //количество линий
         public float crossArea;     //площадь поперечного сечения
         public bool burnout;        //провод сгорел
         public bool isolated;       //изолированный проводник
         public bool isolatedEnvironment; //изолированный от окружающей среды проводник
+        public byte causeBurnout;   //причина сгорания (0 - не сгорел, 1 - перегрузка по току, 2 - неверное напряжение, 3 - окружающая среда)
 
-        public EParams(int voltage, float maxCurrent, string material, float resisitivity, byte lines, float crossArea, bool burnout, bool isolated, bool isolatedEnvironment)
+        public EParams(int voltage, float maxCurrent, string material, float resistivity, byte lines, float crossArea, bool burnout, bool isolated, bool isolatedEnvironment, byte causeBurnout=0)
         {
             this.voltage = voltage;
             this.maxCurrent = maxCurrent;
             this.material = material;
-            this.resisitivity = resisitivity;
+            this.resistivity = resistivity;
             this.lines = lines;
             this.crossArea = crossArea;
             this.burnout = burnout;
             this.isolated = isolated;
             this.isolatedEnvironment = isolatedEnvironment;
+            this.causeBurnout = causeBurnout;
         }
 
         public EParams()
@@ -35,12 +37,13 @@ namespace ElectricalProgressive.Utils
             voltage = 0;
             maxCurrent = 0.0F;
             material = "";
-            resisitivity = 0.0F;
+            resistivity = 0.0F;
             lines = 0;
             crossArea = 0.0F;
             burnout = false;
             isolated = false;
             isolatedEnvironment = true;
+            causeBurnout = 0;
         }
 
 
@@ -49,12 +52,15 @@ namespace ElectricalProgressive.Utils
             return voltage == other.voltage &&
                    maxCurrent.Equals(other.maxCurrent) &&
                    material == other.material &&
-                   resisitivity.Equals(other.resisitivity) &&
+                   resistivity.Equals(other.resistivity) &&
                    lines == other.lines &&
                    crossArea.Equals(other.crossArea) &&
                    burnout == other.burnout &&
                    isolated == other.isolated &&
-                   isolatedEnvironment == other.isolatedEnvironment;
+                   isolatedEnvironment == other.isolatedEnvironment &&
+                   causeBurnout == other.causeBurnout;
+
+
         }
 
         public override bool Equals(object? obj)
@@ -70,12 +76,13 @@ namespace ElectricalProgressive.Utils
                 hash = hash * 31 + voltage;
                 hash = hash * 31 + maxCurrent.GetHashCode();
                 hash = hash * 31 + material.GetHashCode();
-                hash = hash * 31 + resisitivity.GetHashCode();
+                hash = hash * 31 + resistivity.GetHashCode();
                 hash = hash * 31 + lines;
                 hash = hash * 31 + crossArea.GetHashCode();
                 hash = hash * 31 + burnout.GetHashCode();
                 hash = hash * 31 + isolated.GetHashCode();
                 hash = hash * 31 + isolatedEnvironment.GetHashCode();
+                hash = hash * 31 + causeBurnout;
                 return hash;
             }
         }

@@ -60,7 +60,7 @@ namespace ElectricalProgressive
 
 
         public readonly HashSet<Network> networks = new();
-        private readonly Dictionary<BlockPos, NetworkPart> parts = new(); // Хранит все элементы всех цепей
+        public readonly Dictionary<BlockPos, NetworkPart> parts = new(); // Хранит все элементы всех цепей
 
         public int speedOfElectricity; // Скорость электричества в проводах (блоков в тик)
         public bool instant; // Расчет мгновенно?
@@ -79,6 +79,8 @@ namespace ElectricalProgressive
 
         int envUpdater = 0;
 
+        private long listenerId; 
+
         /// <summary>
         /// Запуск модификации
         /// </summary>
@@ -91,10 +93,60 @@ namespace ElectricalProgressive
             //инициализируем обработчик уронов
             damageManager = new DamageManager(api);
 
-            api.Event.RegisterGameTickListener(this.OnGameTick, tickTimeMs);
+            listenerId=api.Event.RegisterGameTickListener(this.OnGameTick, tickTimeMs);
 
 
         }
+
+
+        /// <summary>
+        /// Освобождение ресурсов
+        /// </summary>
+        public override void Dispose()
+        {
+            base.Dispose();
+
+            // Удаляем слушатель тиков игры
+            if (api != null)
+            {
+                api.Event.UnregisterGameTickListener(listenerId);
+            }
+
+            // Очистка глобальных коллекций и ресурсов
+            consumers.Clear();
+            producers.Clear();
+            accums.Clear();
+            transformators.Clear();
+            globalEnergyPackets.Clear();
+
+            consumerPositions = null;
+            consumerRequests = null;
+            producerPositions = null;
+            producerGive = null;
+            consumer2Positions = null;
+            consumer2Requests = null;
+            producer2Positions = null;
+            producer2Give = null;
+
+            sumEnergy.Clear();
+            packetsByPosition.Clear();
+            packetsToRemove.Clear();
+
+            networks.Clear();
+            parts.Clear();
+
+            sim.Reset();
+            sim2.Reset();
+
+            api = null!;
+            capi = null!;
+            sapi = null!;
+            config = null;
+            damageManager = null;
+            WeatherSystemServer = null;
+
+        }
+
 
 
 
@@ -131,11 +183,11 @@ namespace ElectricalProgressive
             base.StartClientSide(api);
             this.capi = api;
             RegisterAltKeys();
-
+            
         }
 
 
-
+        
 
 
         /// <summary>
@@ -736,7 +788,7 @@ namespace ElectricalProgressive
                                 if ((nextPart.Connection & packet.usedConnections[curIndex - 1]) != 0)
                                 {
                                     // считаем сопротивление
-                                    resistance = currentPart.eparams[currentFacingFrom].resisitivity /
+                                    resistance = currentPart.eparams[currentFacingFrom].resistivity /
                                                        (currentPart.eparams[currentFacingFrom].lines *
                                                         currentPart.eparams[currentFacingFrom].crossArea);
 
@@ -913,6 +965,7 @@ namespace ElectricalProgressive
                             if (faceParams.voltage != 0 && packet2.voltage > faceParams.voltage)
                             {
                                 part.eparams[lastFaceIndex].burnout = true;
+                                part.eparams[lastFaceIndex].causeBurnout = 2;
 
                                 if (packet2.path[packet2.currentIndex] == partPos)
                                     packetsToRemove.Add(packet2);
@@ -934,7 +987,7 @@ namespace ElectricalProgressive
                             continue;
 
                         part.eparams[faceIndex].burnout = true;
-
+                        part.eparams[faceIndex].causeBurnout = 1;
 
                         packetsToRemove.AddRange(
                             globalEnergyPackets.Where(p =>
