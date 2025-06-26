@@ -62,8 +62,9 @@ namespace ElectricalProgressive
         public readonly HashSet<Network> networks = new();
         public readonly Dictionary<BlockPos, NetworkPart> parts = new(); // Хранит все элементы всех цепей
 
-        public int speedOfElectricity; // Скорость электричества в проводах (блоков в тик)
-        public bool instant; // Расчет мгновенно?
+        public static int speedOfElectricity; // Скорость электричества в проводах (блоков в тик)
+        public static bool instant; // Расчет мгновенно?
+        public static int timeBeforeBurnout; // Время до сгорания проводника в секундах
 
         private PathFinder pathFinder = new PathFinder(); // Модуль поиска путей
         public ICoreAPI api = null!;
@@ -79,7 +80,7 @@ namespace ElectricalProgressive
 
         int envUpdater = 0;
 
-        private long listenerId; 
+        private long listenerId;
 
         /// <summary>
         /// Запуск модификации
@@ -88,12 +89,13 @@ namespace ElectricalProgressive
         public override void Start(ICoreAPI api)
         {
             base.Start(api);
+
             this.api = api;
 
             //инициализируем обработчик уронов
             damageManager = new DamageManager(api);
 
-            listenerId=api.Event.RegisterGameTickListener(this.OnGameTick, tickTimeMs);
+            listenerId = api.Event.RegisterGameTickListener(this.OnGameTick, tickTimeMs);
 
 
         }
@@ -161,6 +163,7 @@ namespace ElectricalProgressive
 
             speedOfElectricity = Math.Clamp(config.speedOfElectricity, 1, 16);
             instant = config.instant;
+            timeBeforeBurnout = Math.Clamp(config.timeBeforeBurnout, 1, 600);
 
             //устанавливаем частоту просчета сети
             if (instant)
@@ -183,11 +186,11 @@ namespace ElectricalProgressive
             base.StartClientSide(api);
             this.capi = api;
             RegisterAltKeys();
-            
+
         }
 
 
-        
+
 
 
         /// <summary>
@@ -276,13 +279,16 @@ namespace ElectricalProgressive
             foreach (var part in parts.Values)
             {
                 //не трогать тут ничего
-                if (part.eparams != null && part.eparams.Length > 0)
+                if (part.eparams != null && part.eparams.Length == 6) // если проводник существует и имеет 6 проводников
                 {
                     for (int i = 0; i < 6; i++)
                     {
-                        if (part.eparams[i].Equals(new EParams()))
-                            part.eparams[i] = new EParams();
+                        if (!part.eparams[i].burnout && part.eparams[i].ticksBeforeBurnout > 0) // если проводник не сгорел и есть тики до сгорания
+                            part.eparams[i].ticksBeforeBurnout--;                               // уменьшаем тики до сгорания
                     }
+
+                    //if (part.eparams[i].Equals(new EParams()))
+                    //    part.eparams[i] = new EParams();
                 }
                 else
                 {
@@ -964,8 +970,9 @@ namespace ElectricalProgressive
                             faceParams = part.eparams[lastFaceIndex];
                             if (faceParams.voltage != 0 && packet2.voltage > faceParams.voltage)
                             {
-                                part.eparams[lastFaceIndex].burnout = true;
-                                part.eparams[lastFaceIndex].causeBurnout = 2;
+                                //part.eparams[lastFaceIndex].burnout = true;
+                                //part.eparams[lastFaceIndex].causeBurnout = 2;
+                                part.eparams[lastFaceIndex].prepareForBurnout(2);
 
                                 if (packet2.path[packet2.currentIndex] == partPos)
                                     packetsToRemove.Add(packet2);
@@ -986,8 +993,9 @@ namespace ElectricalProgressive
                             part.current[faceIndex] <= faceParams.maxCurrent * faceParams.lines)
                             continue;
 
-                        part.eparams[faceIndex].burnout = true;
-                        part.eparams[faceIndex].causeBurnout = 1;
+                        //part.eparams[faceIndex].burnout = true;
+                        //part.eparams[faceIndex].causeBurnout = 1;
+                        part.eparams[faceIndex].prepareForBurnout(1);
 
                         packetsToRemove.AddRange(
                             globalEnergyPackets.Where(p =>
@@ -1494,7 +1502,7 @@ namespace ElectricalProgressive
         /// <param name="facing"></param>
         /// <param name="method">Метод вывода с какой грани "thisFace"- эту грань, "firstFace"- информация о первой грани из многих, "currentFace" - информация о грани, в которой ток больше 0</param>
         /// <returns></returns>
-        public NetworkInformation GetNetworks(BlockPos position, Facing facing, string method="thisFace")
+        public NetworkInformation GetNetworks(BlockPos position, Facing facing, string method = "thisFace")
         {
             var result = new NetworkInformation(); // результат вываливается сюда
 
@@ -1523,7 +1531,7 @@ namespace ElectricalProgressive
 
                     foreach (BlockFacing blockFacing2 in FacingHelper.Faces(facing))
                     {
-                        if (part.Networks[blockFacing2.Index] is { } networkk && part.current[blockFacing2.Index]>0.0F)
+                        if (part.Networks[blockFacing2.Index] is { } networkk && part.current[blockFacing2.Index] > 0.0F)
                         {
                             blockFacing = blockFacing2;
                             searchIndex = blockFacing2.Index;
@@ -1611,6 +1619,7 @@ namespace ElectricalProgressive
     {
         public int speedOfElectricity = 4;
         public bool instant = false;
+        public int timeBeforeBurnout = 30; 
     }
 
     /// <summary>

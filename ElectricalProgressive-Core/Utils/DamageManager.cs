@@ -25,13 +25,13 @@ namespace ElectricalProgressive.Utils
         };
 
         //сила отталкивания
-        private const double KNOCKBACK_STRENGTH = 0.4;
+        private static  double KNOCKBACK_STRENGTH = 0.4;
 
         // Интервал в миллисекундах (2 секунды)
-        private const long DAMAGE_INTERVAL_MS = 2000;
+        private static long DAMAGE_INTERVAL_MS = 2000;
 
         // Ключ для хранения времени удара
-        private const string key = "damageByElectricity";
+        private static string key = "damageByElectricity";
 
         private ICoreAPI api;
 
@@ -47,16 +47,15 @@ namespace ElectricalProgressive.Utils
         public DamageManager(ICoreAPI api)
         {
             this.api = api;
-
         }
 
 
 
 
         // Время жизни кэша в миллисекундах (например, 1 с)
-        private const long CacheTtlMs = 1000;
+        private static long CacheTtlMs = 1000;
         // Интервал между автосбросами кэша в миллисекундах (например, 1 минута)
-        private const long CleanupIntervalMs = 60 * 1000;
+        private static long CleanupIntervalMs = 60 * 1000;
 
         // Структура для хранения данных + время записи
         private class CacheEntry
@@ -293,8 +292,9 @@ namespace ElectricalProgressive.Utils
             // Локальная функция для обработки сгорания
             void Burnout(int i, ref NetworkPart part)
             {
-                part.eparams[i].burnout = true;
-                part.eparams[i].causeBurnout= 3;
+                //part.eparams[i].burnout = true;
+                //part.eparams[i].causeBurnout= 3;
+                part.eparams[i].prepareForBurnout(3);
             }
 
             /* сильно увеличивает нагрузку 
