@@ -82,7 +82,7 @@ namespace ElectricalProgressive.Utils
                 this.causeBurnout = causeBurnout;
 
             if (this.causeBurnout == 3)
-                this.ticksBeforeBurnout += 40; // увеличиваем количество тиков, которые накопил проводник
+                this.ticksBeforeBurnout += 40; // увеличиваем количество тиков, которые накопил проводник от погоды
             else
                 this.ticksBeforeBurnout += 2; // увеличиваем количество тиков, которые накопил проводник
 

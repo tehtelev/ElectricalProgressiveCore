@@ -134,18 +134,19 @@ namespace ElectricalProgressive
             packetsByPosition.Clear();
             packetsToRemove.Clear();
 
-            networks.Clear();
-            parts.Clear();
-
             sim.Reset();
             sim2.Reset();
 
             api = null!;
             capi = null!;
             sapi = null!;
-            config = null;
             damageManager = null;
             WeatherSystemServer = null;
+
+            pathFinder = null!;
+
+            networks.Clear();
+            parts.Clear();
 
         }
 
@@ -716,6 +717,7 @@ namespace ElectricalProgressive
                     t.ElectricTransformator.Update();
                 }
 
+
             }
 
 
@@ -787,16 +789,16 @@ namespace ElectricalProgressive
                         if (parts.TryGetValue(nextPos, out nextPart!) &&
                             parts.TryGetValue(currentPos, out currentPart!))
                         {
-                            if (!nextPart.eparams[packet.facingFrom[curIndex - 1]].burnout)
+                            if (!nextPart.eparams[packet.facingFrom[curIndex - 1]].burnout) //проверяем не сгорела ли грань в след блоке
                             {
 
+                                if ((nextPart.Connection & packet.usedConnections[curIndex - 1]) == packet.usedConnections[curIndex - 1]) // проверяем совпадает ли путь в пакете с путем в части сети
 
-                                if ((nextPart.Connection & packet.usedConnections[curIndex - 1]) != 0)
                                 {
                                     // считаем сопротивление
                                     resistance = currentPart.eparams[currentFacingFrom].resistivity /
-                                                       (currentPart.eparams[currentFacingFrom].lines *
-                                                        currentPart.eparams[currentFacingFrom].crossArea);
+                                                   (currentPart.eparams[currentFacingFrom].lines *
+                                                    currentPart.eparams[currentFacingFrom].crossArea);
 
                                     // Провод в изоляции теряет меньше энергии
                                     if (currentPart.eparams[currentFacingFrom].isolated)
@@ -1619,7 +1621,7 @@ namespace ElectricalProgressive
     {
         public int speedOfElectricity = 4;
         public bool instant = false;
-        public int timeBeforeBurnout = 30; 
+        public int timeBeforeBurnout = 30;
     }
 
     /// <summary>
