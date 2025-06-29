@@ -830,25 +830,41 @@ namespace ElectricalProgressive
                                     // пересчитаем ток уже с учетом потерь
                                     current = packet.energy / packet.voltage;
 
-                                    // пакет не бесполезен?
-                                    if (packet.energy > 0.001f)
+
+                                    packet.currentIndex--;
+
+                                    // далее учитываем правило алгебраического сложения встречных токов
+                                    // 1) Определяем вектор движени
+                                    var delta = nextPos.SubCopy(currentPos);
+                                    bool sign = true;
+                                    
+                                    if (delta.X < 0)    sign = !sign;
+                                   
+                                    if (delta.Y < 0)    sign = !sign;
+
+                                    if (delta.Z < 0)    sign = !sign;
+
+                                    // 2) Прописываем токи на нужные грани
+                                    int j = 0;
+                                    foreach (var face in packet.nowProcessedFaces[packet.currentIndex])
                                     {
-
-                                        packet.currentIndex--; // уменьшаем индекс пакета
-
-
-                                        int j = 0;
-                                        foreach (var face in packet.nowProcessedFaces[packet.currentIndex])
+                                        if (face)
                                         {
-                                            if (face)
-                                                nextPart.current[j] += current;
-                                            j++;
+                                            if (sign)
+                                                nextPart.current[j] += current; // добавляем ток в следующую часть сети
+                                            else
+                                                nextPart.current[j] -= current; // добавляем ток в следующую часть сети
                                         }
+                                        j++;
                                     }
-                                    else
+
+                                    // 3) Если энергия пакета почти нулевая — удаляем пакет
+                                    if (packet.energy <= 0.001f)
                                     {
                                         globalEnergyPackets.RemoveAt(i);
                                     }
+
+
                                 }
                                 else
                                 {
