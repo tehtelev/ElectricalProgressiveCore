@@ -23,7 +23,7 @@ using System.Diagnostics;
     "Electrical Progressive: Core",
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
-    Description = "Brings electricity into the game!",
+    Description = "Electrical logic library.",
     Version = "1.1.0",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
@@ -34,10 +34,17 @@ namespace ElectricalProgressive
 {
     public class ElectricalProgressive : ModSystem
     {
+        public readonly HashSet<Network> networks = new();
+        public readonly Dictionary<BlockPos, NetworkPart> parts = new(); // Хранит все элементы всех цепей
+
+        private Dictionary<BlockPos, List<EnergyPacket>> packetsByPosition = new Dictionary<BlockPos, List<EnergyPacket>>(); //Словарь для хранения пакетов по позициям
+        private List<EnergyPacket> packetsToRemove = new List<EnergyPacket>(); // Список пакетов для удаления после проверки на сгорание
+
         private readonly List<Consumer> consumers = new();
         private readonly List<Producer> producers = new();
         private readonly List<Accumulator> accums = new();
         private readonly List<Transformator> transformators = new();
+        private readonly List<Conductor> conductors = new();
 
         private readonly List<EnergyPacket> globalEnergyPackets = new(); // Глобальный список пакетов энергии
 
@@ -52,19 +59,8 @@ namespace ElectricalProgressive
         private float[]? producer2Give;
 
 
+        private Dictionary<BlockPos, float> sumEnergy = new Dictionary<BlockPos, float>();
 
-        Dictionary<BlockPos, float> sumEnergy = new Dictionary<BlockPos, float>();
-
-        Dictionary<BlockPos, List<EnergyPacket>> packetsByPosition = new Dictionary<BlockPos, List<EnergyPacket>>(); //Словарь для хранения пакетов по позициям
-        List<EnergyPacket> packetsToRemove = new List<EnergyPacket>(); // Список пакетов для удаления после проверки на сгорание
-
-
-        public readonly HashSet<Network> networks = new();
-        public readonly Dictionary<BlockPos, NetworkPart> parts = new(); // Хранит все элементы всех цепей
-
-        public static int speedOfElectricity; // Скорость электричества в проводах (блоков в тик)
-        public static bool instant; // Расчет мгновенно?
-        public static int timeBeforeBurnout; // Время до сгорания проводника в секундах
 
         private PathFinder pathFinder = new PathFinder(); // Модуль поиска путей
         public ICoreAPI api = null!;
@@ -76,7 +72,15 @@ namespace ElectricalProgressive
 
         private Simulation sim = new Simulation();
         private Simulation sim2 = new Simulation();
+
+
+
+        public static int speedOfElectricity; // Скорость электричества в проводах (блоков в тик)
+        public static bool instant; // Расчет мгновенно?
+        public static int timeBeforeBurnout; // Время до сгорания проводника в секундах
+
         int tickTimeMs;
+        private float elapsedMs = 0f;
 
         int envUpdater = 0;
 
@@ -119,6 +123,7 @@ namespace ElectricalProgressive
             producers.Clear();
             accums.Clear();
             transformators.Clear();
+            conductors.Clear();
             globalEnergyPackets.Clear();
 
             consumerPositions = null;
@@ -394,8 +399,8 @@ namespace ElectricalProgressive
         /// <summary>
         /// Тикаем
         /// </summary>
-        /// <param name="_"></param>
-        private void OnGameTick(float _)
+        /// <param name="deltaTime"></param>
+        private void OnGameTick(float deltaTime)
         {
 
             //Очищаем старые пути
@@ -414,6 +419,7 @@ namespace ElectricalProgressive
                 consumers.Clear();
                 accums.Clear();
                 transformators.Clear();
+                conductors.Clear();
 
 
 
@@ -683,18 +689,12 @@ namespace ElectricalProgressive
                 network.Request = Math.Max(requestSum, 0f);
 
 
-                // Обновление компонентов
-                foreach (var electricTransformator in network.Transformators)
-                {
-                    transformators.Add(new Transformator(electricTransformator));
-                }
 
                 float capacity = 0f; // Суммарная емкость сети
                 float maxCapacity = 0f; // Максимальная емкость сети
 
                 foreach (var a in accums)
                 {
-                    a.ElectricAccum.Update();
                     capacity += a.ElectricAccum.GetCapacity();
                     maxCapacity += a.ElectricAccum.GetMaxCapacity();
                 }
@@ -702,23 +702,39 @@ namespace ElectricalProgressive
                 network.Capacity = capacity;
                 network.MaxCapacity = maxCapacity;
 
-                foreach (var p in producers)
-                {
-                    p.ElectricProducer.Update();
-                }
 
-                foreach (var c in consumers)
-                {
-                    c.ElectricConsumer.Update();
-                }
-
-                foreach (var t in transformators)
-                {
-                    t.ElectricTransformator.Update();
-                }
 
 
             }
+
+
+            // Обновление электрических компонентов в сети, если прошло достаточно времени
+            elapsedMs += deltaTime;
+            if (elapsedMs > 0.5f)
+            {
+                foreach (var network in networks)
+                {
+                    foreach (var electricTransformator in network.Transformators)
+                        electricTransformator.Update();
+
+                    foreach (var electricConductor in network.Conductors)
+                        electricConductor.Update();
+
+                    foreach (var electricConsumer in network.Consumers)
+                        electricConsumer.Update();
+
+                    foreach (var electricProducer in network.Producers)
+                        electricProducer.Update();
+
+                    foreach (var electricAccum in network.Accumulators)
+                        electricAccum.Update();
+                }
+
+                elapsedMs = 0f; // сбросить накопленное время
+            }
+
+
+
 
 
 
@@ -814,7 +830,7 @@ namespace ElectricalProgressive
                                     // пересчитаем ток уже с учетом потерь
                                     current = packet.energy / packet.voltage;
 
-                                    // пакет не бесполезен
+                                    // пакет не бесполезен?
                                     if (packet.energy > 0.001f)
                                     {
 
@@ -972,8 +988,6 @@ namespace ElectricalProgressive
                             faceParams = part.eparams[lastFaceIndex];
                             if (faceParams.voltage != 0 && packet2.voltage > faceParams.voltage)
                             {
-                                //part.eparams[lastFaceIndex].burnout = true;
-                                //part.eparams[lastFaceIndex].causeBurnout = 2;
                                 part.eparams[lastFaceIndex].prepareForBurnout(2);
 
                                 if (packet2.path[packet2.currentIndex] == partPos)
@@ -995,8 +1009,6 @@ namespace ElectricalProgressive
                             part.current[faceIndex] <= faceParams.maxCurrent * faceParams.lines)
                             continue;
 
-                        //part.eparams[faceIndex].burnout = true;
-                        //part.eparams[faceIndex].causeBurnout = 1;
                         part.eparams[faceIndex].prepareForBurnout(1);
 
                         packetsToRemove.AddRange(
@@ -1036,15 +1048,12 @@ namespace ElectricalProgressive
             part.Accumulator?.SetCapacity(0f);
             part.Transformator?.setPower(0f);
 
-            part.Consumer?.Update();
-            part.Producer?.Update();
-            part.Accumulator?.Update();
-            part.Transformator?.Update();
+            //part.Consumer?.Update();
+            //part.Conductor?.Update();
+            //part.Producer?.Update();
+            //part.Accumulator?.Update();
+            //part.Transformator?.Update();
 
-            //part.Consumer = null;
-            //part.Producer = null;
-            //part.Accumulator = null;
-            //part.Transformator = null;
         }
 
 
@@ -1087,6 +1096,7 @@ namespace ElectricalProgressive
                             }
                         }
 
+                        if (part.Conductor is { } conductor) outNetwork.Conductors.Add(conductor);
                         if (part.Consumer is { } consumer) outNetwork.Consumers.Add(consumer);
                         if (part.Producer is { } producer) outNetwork.Producers.Add(producer);
                         if (part.Accumulator is { } accumulator) outNetwork.Accumulators.Add(accumulator);
@@ -1282,6 +1292,11 @@ namespace ElectricalProgressive
             {
                 var network = this.MergeNetworks(networksByFace[face.Index]);
 
+                if (part.Conductor is { } conductor)
+                {
+                    network.Conductors.Add(conductor);
+                }
+
                 if (part.Consumer is { } consumer)
                 {
                     network.Consumers.Add(consumer);
@@ -1301,6 +1316,8 @@ namespace ElectricalProgressive
                 {
                     network.Transformators.Add(transformator);
                 }
+
+
 
                 network.PartPositions.Add(part.Position);
 
@@ -1383,6 +1400,21 @@ namespace ElectricalProgressive
                 }
             }
         }
+
+
+
+        /// <summary>
+        /// Задать проводник
+        /// </summary>
+        /// <param name="position"></param>
+        /// <param name="conductor"></param>
+        public void SetConductor(BlockPos position, IElectricConductor? conductor) =>
+        SetComponent(
+            position,
+            conductor,
+            part => part.Conductor,
+            (part, c) => part.Conductor = c,
+            network => network.Conductors);
 
 
 
@@ -1574,6 +1606,17 @@ namespace ElectricalProgressive
 
     }
 
+
+    /// <summary>
+    /// Проводник тока
+    /// </summary>
+    internal class Conductor
+    {
+        public readonly IElectricConductor ElectricConductor;
+        public Conductor(IElectricConductor electricConductor) => ElectricConductor = electricConductor;
+    }
+
+
     /// <summary>
     /// Потребитель
     /// </summary>
@@ -1612,6 +1655,8 @@ namespace ElectricalProgressive
         public readonly IElectricAccumulator ElectricAccum;
         public Accumulator(IElectricAccumulator electricAccum) => ElectricAccum = electricAccum;
     }
+
+
 
 
     /// <summary>

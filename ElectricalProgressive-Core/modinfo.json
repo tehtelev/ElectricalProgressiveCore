@@ -6,7 +6,7 @@
     "Tehtelev",
     "Kotl"
   ],
-  "description": "Brings electricity into the game!",
+  "description": "Electrical logic library.",
   "Version": "1.1.0",
   "dependencies": {
     "game": "1.20.0"

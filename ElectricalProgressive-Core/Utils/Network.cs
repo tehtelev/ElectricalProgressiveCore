@@ -11,6 +11,7 @@ namespace ElectricalProgressive.Utils
     {
         public readonly HashSet<IElectricAccumulator> Accumulators = new();  //Аккумуляторы
         public readonly HashSet<IElectricConsumer> Consumers = new();       //Потребители
+        public readonly HashSet<IElectricConductor> Conductors = new();       //Проводники
         public readonly HashSet<IElectricProducer> Producers = new();           //Генераторы
         public readonly HashSet<IElectricTransformator> Transformators = new();  //Трансформаторы
         public readonly HashSet<BlockPos> PartPositions = new();     //Координаты позиций сети
@@ -19,7 +20,7 @@ namespace ElectricalProgressive.Utils
         public float MaxCapacity; //Максимальная емкость батарей
         public float Production;  //Генерация
         public float Request;     //Необходимость
-        public int version;       // Версия сети, для отслеживания изменений
+        public int version;       //Версия сети, для отслеживания изменений
 
     }
 }

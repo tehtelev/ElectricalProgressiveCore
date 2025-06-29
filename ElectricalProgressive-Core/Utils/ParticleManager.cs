@@ -19,13 +19,13 @@ namespace ElectricalProgressive.Utils
         )
         {
             Bounciness = 1f,                     // отскок частиц от блоков
-            VertexFlags = 128,                // флаг для отрисовки частиц
+            VertexFlags = 128,                   // флаг для отрисовки частиц
             addLifeLength = 0.5f,                // время жизни частиц
             LifeLength = 0.5f,
             GravityEffect = 1.0f,
             ParticleModel = EnumParticleModel.Cube,
-            MinSize = 0.4f,                              // маленький стартовый размер :contentReference[oaicite:1]{index=1}
-            MaxSize = 0.6f,                              // без разброса размера :contentReference[oaicite:2]{index=2}
+            MinSize = 0.4f,                           // маленький стартовый размер 
+            MaxSize = 0.6f,                           // без разброса размера 
             LightEmission = 0,                        // яркость частиц
 
         };
@@ -34,8 +34,26 @@ namespace ElectricalProgressive.Utils
         private static readonly SimpleParticleProperties SmokeTemplate = new SimpleParticleProperties(
             minQuantity: 1, maxQuantity: 1,
             color: ColorUtil.ColorFromRgba(50, 50, 50, 200),
-            minPos: new Vec3d(), maxPos: new Vec3d(0.3, 0.1, 0.3),
-            minVelocity: new Vec3f(0f, 0.1f, 0f), maxVelocity: new Vec3f(0.2f, 0.2f, 0.2f)
+            minPos: new Vec3d(), maxPos: new Vec3d(0.8, 0.1, 0.8),
+            minVelocity: new Vec3f(-0.1f, -0.1f, -0.1f), maxVelocity: new Vec3f(0.1f, 0.1f, 0.1f)
+        )
+        {
+            WindAffected = true,
+            LifeLength = 2f,
+            GravityEffect = -0.01f,
+            ParticleModel = EnumParticleModel.Quad,
+            SizeEvolve = new EvolvingNatFloat(EnumTransformFunction.LINEAR, 1f),
+            OpacityEvolve = new EvolvingNatFloat(EnumTransformFunction.LINEAR, -100),
+            MinSize = 0.8f,                           
+            MaxSize = 1.2f,                          
+        };
+
+        // шаблон «белого дыма» для дымовых труб
+        private static readonly SimpleParticleProperties WhiteSmokeTemplate = new SimpleParticleProperties(
+            minQuantity: 1, maxQuantity: 1,
+            color: ColorUtil.ColorFromRgba(210, 210, 210, 200),
+            minPos: new Vec3d(-0.1, -0.1, -0.1), maxPos: new Vec3d(0.1, 0.1, 0.1),
+            minVelocity: new Vec3f(-0.1f, -0.1f, 0f), maxVelocity: new Vec3f(0.1f, 0.1f, 0.1f)
         )
         {
             WindAffected = true,
@@ -46,20 +64,23 @@ namespace ElectricalProgressive.Utils
             OpacityEvolve = new EvolvingNatFloat(EnumTransformFunction.LINEAR, -100)
         };
 
-        // шаблон «белого дыма»
-        private static readonly SimpleParticleProperties WhiteSmokeTemplate = new SimpleParticleProperties(
+
+        // шаблон «белого дыма» подготовки сгореть
+        private static readonly SimpleParticleProperties WhiteSlowSmokeTemplate = new SimpleParticleProperties(
             minQuantity: 1, maxQuantity: 1,
             color: ColorUtil.ColorFromRgba(210, 210, 210, 200),
-            minPos: new Vec3d(-0.1, -0.1, -0.1), maxPos: new Vec3d(0.1, 0.1, 0.1),
-            minVelocity: new Vec3f(0f, 0.1f, 0f), maxVelocity: new Vec3f(0.1f, 0.2f, 0.1f)
+            minPos: new Vec3d(), maxPos: new Vec3d(0.8, 0.1, 0.8),
+            minVelocity: new Vec3f(-0.1f, -0.1f, -0.1f), maxVelocity: new Vec3f(0.1f, 0.1f, 0.1f)
         )
         {
             WindAffected = true,
             LifeLength = 2f,
-            GravityEffect = -0.02f,
+            GravityEffect = -0.01f,
             ParticleModel = EnumParticleModel.Quad,
-            SizeEvolve = new EvolvingNatFloat(EnumTransformFunction.LINEAR, 1f),
-            OpacityEvolve = new EvolvingNatFloat(EnumTransformFunction.LINEAR, -100)
+            SizeEvolve = new EvolvingNatFloat(EnumTransformFunction.LINEAR, 0.5f),
+            OpacityEvolve = new EvolvingNatFloat(EnumTransformFunction.LINEAR, -100),
+            MinSize = 0.5f,
+            MaxSize = 0.75f,
         };
 
 
@@ -82,6 +103,13 @@ namespace ElectricalProgressive.Utils
         {
             WhiteSmokeTemplate.MinPos = pos;
             world.SpawnParticles(WhiteSmokeTemplate);
+        }
+
+        // метод для спавна белого дыма в точке pos, который медленно уходит
+        public static void SpawnWhiteSlowSmoke(IWorldAccessor world, Vec3d pos)
+        {
+            WhiteSlowSmokeTemplate.MinPos = pos;
+            world.SpawnParticles(WhiteSlowSmokeTemplate);
         }
     }
 }

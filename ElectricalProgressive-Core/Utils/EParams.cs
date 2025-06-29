@@ -89,6 +89,7 @@ namespace ElectricalProgressive.Utils
             if (ticksBeforeBurnout > maxTicksBeforeBurnout) // если проводник накопил максимальное количество тиков
             {
                 burnout = true; // проводник сгорел
+                ticksBeforeBurnout = 0; // обнуляем количество тиков
             }
 
         }

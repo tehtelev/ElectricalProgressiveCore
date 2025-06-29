@@ -15,6 +15,7 @@ namespace ElectricalProgressive.Utils
         public Facing Connection = Facing.None;
         public IElectricAccumulator? Accumulator;
         public IElectricConsumer? Consumer;
+        public IElectricConductor? Conductor;
         public IElectricProducer? Producer;
         public IElectricTransformator? Transformator;
 
