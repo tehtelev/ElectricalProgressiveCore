@@ -141,6 +141,17 @@ namespace ElectricalProgressive.Utils
 
 
 
+        /// <summary>
+        /// Функция для обработки сгорания
+        /// </summary>
+        /// <param name="i"></param>
+        /// <param name="part"></param>
+        void Burnout(int i, ref NetworkPart part)
+        {
+            part.eparams[i].prepareForBurnout(3);
+        }
+
+
 
 
         /// <summary>
@@ -150,7 +161,7 @@ namespace ElectricalProgressive.Utils
         /// <param name="entity"></param>
         /// <param name="pos"></param>
         /// <param name="facing"></param>
-        /// <param name="blockentity"></param>
+        /// <param name="AllEparams"></param>
         /// <param name="block"></param>
         public void DamageEntity(IWorldAccessor world, Entity entity, BlockPos pos, BlockFacing facing, EParams[] AllEparams, Block block)
         {
@@ -233,8 +244,10 @@ namespace ElectricalProgressive.Utils
         /// <summary>
         /// Наносим урон приборам от жидкостей
         /// </summary>
-        /// <param name="api"></param>
+        /// <param name="sapi"></param>
         /// <param name="part"></param>
+        /// <param name="blockAccessor"></param>
+        /// <returns></returns>
         public bool DamageByEnvironment(ICoreServerAPI sapi, ref NetworkPart part, ref IBlockAccessor blockAccessor)
         {
             //без api тут точно нечего делать
@@ -287,38 +300,32 @@ namespace ElectricalProgressive.Utils
 
 
 
-            BlockPos pos = part.Position;
+            BlockPos pos = part.Position; // Позиция блока, к которому относится часть сети
 
-            // Локальная функция для обработки сгорания
-            void Burnout(int i, ref NetworkPart part)
-            {
-                //part.eparams[i].burnout = true;
-                //part.eparams[i].causeBurnout= 3;
-                part.eparams[i].prepareForBurnout(3);
-            }
 
-            /* сильно увеличивает нагрузку 
+
+            // проверяем находится ли кабель под нагрузкой
             bool[] powered = new bool[6]; //массив для хранения устройств, которые под напряжением
 
+            NetworkInformation networkInformation;
             for (int i = 0; i <= 5; i++) //перебор всех граней
             {
-                
-                var networkInformation = this.System?.GetNetworks(pos, FacingHelper.FromFace(FacingHelper.BlockFacingFromIndex(i)));      //получаем информацию о сети
+                networkInformation = this.System?.GetNetworks(pos, FacingHelper.FromFace(FacingHelper.BlockFacingFromIndex(i)));      //получаем информацию о сети
 
-                if (networkInformation?.NumberOfProducers > 0 || networkInformation?.NumberOfAccumulators > 0) //если в сети есть генераторы или аккумы
+                if (networkInformation?.Production > 0f || networkInformation?.NumberOfAccumulators > 0) //если в сети активная генерация или есть аккумы
                 {
                     powered[i] = true; //значит под напряжением
                 }
             }
-            */
 
+            
 
-            // Проверка дождя для всех граней
+            // Проверка осадков для всех граней
             if (isRaining)
             {
                 for (int i = 0; i < 6; i++)
                 {
-                    if (!part.eparams[i].burnout && !part.eparams[i].isolatedEnvironment)
+                    if (!part.eparams[i].burnout && !part.eparams[i].isolatedEnvironment && powered[i])
                     {
                         Burnout(i, ref part);
                         updated = true;
@@ -346,7 +353,7 @@ namespace ElectricalProgressive.Utils
                 {
                     for (int i = 0; i < 6; i++)
                     {
-                        if (!part.eparams[i].burnout && !part.eparams[i].isolatedEnvironment)
+                        if (!part.eparams[i].burnout && !part.eparams[i].isolatedEnvironment && powered[i])
                         {
                             Burnout(i, ref part);
                             updated = true;
@@ -377,7 +384,7 @@ namespace ElectricalProgressive.Utils
                     {
                         for (int i = 0; i < 6; i++)
                         {
-                            if (!part.eparams[i].burnout && !part.eparams[i].isolatedEnvironment)
+                            if (!part.eparams[i].burnout && !part.eparams[i].isolatedEnvironment && powered[i])
                             {
                                 Burnout(i, ref part);
                                 updated = true;
