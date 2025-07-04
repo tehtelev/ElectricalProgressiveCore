@@ -17,6 +17,7 @@ using System.Net.Sockets;
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using Vintagestory.API.Datastructures;
 
 [assembly: ModDependency("game", "1.20.0")]
 [assembly: ModInfo(
@@ -37,8 +38,8 @@ namespace ElectricalProgressive
         public readonly HashSet<Network> networks = new();
         public readonly Dictionary<BlockPos, NetworkPart> parts = new(); // Хранит все элементы всех цепей
 
-        private Dictionary<BlockPos, List<EnergyPacket>> packetsByPosition = new Dictionary<BlockPos, List<EnergyPacket>>(); //Словарь для хранения пакетов по позициям
-        private List<EnergyPacket> packetsToRemove = new List<EnergyPacket>(); // Список пакетов для удаления после проверки на сгорание
+        private Dictionary<BlockPos, List<EnergyPacket>> packetsByPosition = new(); //Словарь для хранения пакетов по позициям
+        private List<EnergyPacket> packetsToRemove = new (); // Список пакетов для удаления после проверки на сгорание
 
         private readonly List<Consumer> consumers = new();
         private readonly List<Producer> producers = new();
@@ -59,10 +60,10 @@ namespace ElectricalProgressive
         private float[]? producer2Give;
 
 
-        private Dictionary<BlockPos, float> sumEnergy = new Dictionary<BlockPos, float>();
+        private Dictionary<BlockPos, float> sumEnergy = new();
 
 
-        private PathFinder pathFinder = new PathFinder(); // Модуль поиска путей
+        private PathFinder pathFinder = new(); // Модуль поиска путей
         public ICoreAPI api = null!;
         private ICoreClientAPI capi = null!;
         private ICoreServerAPI sapi = null!;
@@ -70,8 +71,8 @@ namespace ElectricalProgressive
         public static DamageManager? damageManager;
         public static WeatherSystemServer? WeatherSystemServer;
 
-        private Simulation sim = new Simulation();
-        private Simulation sim2 = new Simulation();
+        private Simulation sim = new();
+        private Simulation sim2 = new();
 
 
 
@@ -234,7 +235,7 @@ namespace ElectricalProgressive
         /// <param name="setEparams"></param>
         /// <param name="Eparams"></param>
         /// <returns></returns>
-        public bool Update(BlockPos position, Facing facing, (EParams, int) setEparams, ref EParams[] Eparams)
+        public bool Update(BlockPos position, Facing facing, (EParams, int) setEparams, ref EParams[] Eparams, bool isLoaded)
         {
             if (!parts.TryGetValue(position, out var part))
             {
@@ -246,6 +247,7 @@ namespace ElectricalProgressive
             var addedConnections = ~part.Connection & facing;
             var removedConnections = part.Connection & ~facing;
 
+            part.IsLoaded = isLoaded; 
             part.eparams = Eparams;
             part.Connection = facing;
 
@@ -279,7 +281,6 @@ namespace ElectricalProgressive
         /// <summary>
         /// Чистка
         /// </summary>
-        /// <param name="all"></param>
         public void Cleaner()
         {
             foreach (var part in parts.Values)
@@ -318,9 +319,6 @@ namespace ElectricalProgressive
         /// <param name="producerPositions"></param>
         /// <param name="producerGive"></param>
         /// <param name="sim"></param>
-        /// <param name="paths"></param>
-        /// <param name="facingFrom"></param>
-        /// <param name="nowProcessedFaces"></param>
         private void logisticalTask(Network network, ref BlockPos[] consumerPositions, ref float[] consumerRequests,
     ref BlockPos[] producerPositions, ref float[] producerGive, ref Simulation sim)
         {
@@ -432,11 +430,14 @@ namespace ElectricalProgressive
 
                 foreach (var electricConsumer in network.Consumers)
                 {
-                    consumers.Add(new Consumer(electricConsumer));
-                    requestedEnergy = electricConsumer.Consume_request();
-                    consumerPositions[consIter] = electricConsumer.Pos;
-                    consumerRequests[consIter] = requestedEnergy;
-                    consIter++;
+                    if (parts.TryGetValue(electricConsumer.Pos, out var part) && part.IsLoaded)
+                    {
+                        consumers.Add(new Consumer(electricConsumer));
+                        requestedEnergy = electricConsumer.Consume_request();
+                        consumerPositions[consIter] = electricConsumer.Pos;
+                        consumerRequests[consIter] = requestedEnergy;
+                        consIter++;
+                    }
                 }
 
                 // Этап 3: Сбор энергии с генераторов и аккумуляторов----------------------------------------------------------------------------
@@ -448,20 +449,26 @@ namespace ElectricalProgressive
 
                 foreach (var electricProducer in network.Producers)
                 {
-                    producers.Add(new Producer(electricProducer));
-                    giveEnergy = electricProducer.Produce_give();
-                    producerPositions[prodIter] = electricProducer.Pos;
-                    producerGive[prodIter] = giveEnergy;
-                    prodIter++;
+                    if (parts.TryGetValue(electricProducer.Pos, out var part) && part.IsLoaded)
+                    {
+                        producers.Add(new Producer(electricProducer));
+                        giveEnergy = electricProducer.Produce_give();
+                        producerPositions[prodIter] = electricProducer.Pos;
+                        producerGive[prodIter] = giveEnergy;
+                        prodIter++;
+                    }
                 }
 
                 foreach (var electricAccum in network.Accumulators)
                 {
-                    accums.Add(new Accumulator(electricAccum));
-                    giveEnergy = electricAccum.canRelease();
-                    producerPositions[prodIter] = electricAccum.Pos;
-                    producerGive[prodIter] = giveEnergy;
-                    prodIter++;
+                    if (parts.TryGetValue(electricAccum.Pos, out var part) && part.IsLoaded)
+                    {
+                        accums.Add(new Accumulator(electricAccum));
+                        giveEnergy =  electricAccum.canRelease();
+                        producerPositions[prodIter] = electricAccum.Pos;
+                        producerGive[prodIter] = giveEnergy;
+                        prodIter++;
+                    }
                 }
 
                 // Этап 4: Распределение энергии ----------------------------------------------------------------------------
@@ -708,26 +715,41 @@ namespace ElectricalProgressive
             }
 
 
-            // Обновление электрических компонентов в сети, если прошло достаточно времени
+            // Обновление электрических компонентов в сети, если прошло достаточно времени около 0.5 секунд
             elapsedMs += deltaTime;
             if (elapsedMs > 0.5f)
             {
                 foreach (var network in networks)
                 {
                     foreach (var electricTransformator in network.Transformators)
-                        electricTransformator.Update();
+                    {
+                        if (parts.TryGetValue(electricTransformator.Pos, out var part) && part.IsLoaded)
+                            electricTransformator.Update();
+                    }
 
                     foreach (var electricConductor in network.Conductors)
-                        electricConductor.Update();
+                    {
+                        if (parts.TryGetValue(electricConductor.Pos, out var part) && part.IsLoaded)
+                            electricConductor.Update();
+                    }
 
                     foreach (var electricConsumer in network.Consumers)
-                        electricConsumer.Update();
+                    {
+                        if (parts.TryGetValue(electricConsumer.Pos, out var part) && part.IsLoaded)
+                            electricConsumer.Update();
+                    }
 
                     foreach (var electricProducer in network.Producers)
-                        electricProducer.Update();
+                    {
+                        if (parts.TryGetValue(electricProducer.Pos, out var part) && part.IsLoaded)
+                            electricProducer.Update();
+                    }
 
                     foreach (var electricAccum in network.Accumulators)
-                        electricAccum.Update();
+                    {
+                        if (parts.TryGetValue(electricAccum.Pos, out var part) && part.IsLoaded)
+                            electricAccum.Update();
+                    }
                 }
 
                 elapsedMs = 0f; // сбросить накопленное время
@@ -892,9 +914,7 @@ namespace ElectricalProgressive
                     }
                 }
 
-
-
-
+                
 
                 foreach (var pair in sumEnergy)
                 {
@@ -936,14 +956,16 @@ namespace ElectricalProgressive
                 float totalEnergy;                       // Суммарная энергия в трансформаторе
                 float totalCurrent;                      // Суммарный ток в трансформаторе
                 int k = 0;
+
                 foreach (var partEntry in parts)
                 {
                     partPos = partEntry.Key;
                     part = partEntry.Value;
 
-                    //обновляем каждый 
-                    updated = k % 20 == envUpdater &&
-                        damageManager!.DamageByEnvironment(this.sapi, ref part, ref bAccessor);
+                    //обновляем каждый блок сети
+                    updated = k % 20 == envUpdater && 
+                              part.IsLoaded &&          // блок загружен?
+                              damageManager!.DamageByEnvironment(this.sapi, ref part, ref bAccessor);
                     k++;
 
 
@@ -956,8 +978,7 @@ namespace ElectricalProgressive
                             if (faceParams.voltage == 0 || !faceParams.burnout)
                                 continue;
 
-
-
+                            
                             ResetComponents(ref part);
                         }
 
@@ -1063,20 +1084,13 @@ namespace ElectricalProgressive
             part.Producer?.Produce_order(0f);
             part.Accumulator?.SetCapacity(0f);
             part.Transformator?.setPower(0f);
-
-            //part.Consumer?.Update();
-            //part.Conductor?.Update();
-            //part.Producer?.Update();
-            //part.Accumulator?.Update();
-            //part.Transformator?.Update();
-
         }
 
 
 
 
         /// <summary>
-        /// Обьединение цепей
+        /// Объединение цепей
         /// </summary>
         /// <param name="networks"></param>
         /// <returns></returns>
@@ -1169,7 +1183,7 @@ namespace ElectricalProgressive
 
 
         /// <summary>
-        /// Cоздаем новую цепь
+        /// Создаем новую цепь
         /// </summary>
         /// <returns></returns>
         private Network CreateNetwork()

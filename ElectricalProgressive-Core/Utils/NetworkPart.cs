@@ -18,6 +18,7 @@ namespace ElectricalProgressive.Utils
         public IElectricConductor? Conductor;
         public IElectricProducer? Producer;
         public IElectricTransformator? Transformator;
+        public bool IsLoaded = false;
 
         public NetworkPart(BlockPos position)
         {
