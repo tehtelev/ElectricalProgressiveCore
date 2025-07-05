@@ -42,6 +42,14 @@ namespace ElectricalProgressive.Utils
         /// </summary>
         public readonly Facing[] usedConnections;
 
+
+        /// <summary>
+        /// Флаг, который говорит, что пакет должен быть удалён и считается невалидным
+        /// </summary>
+        public bool shouldBeRemoved;
+
+
+
         /// <summary>
         /// Создаёт пакет, просто сохраняя ссылки на массивы из кэша.
         /// </summary>
@@ -55,7 +63,6 @@ namespace ElectricalProgressive.Utils
             Facing[] UsedConnections
         )
         {
-            // Никаких Clone() — храним ссылку на кэшированные данные:
             energy = Energy;
             voltage = Voltage;
             currentIndex = CurrentIndex;
@@ -63,6 +70,7 @@ namespace ElectricalProgressive.Utils
             facingFrom = FacingFrom;
             nowProcessedFaces = NowProcessedFaces;
             usedConnections = UsedConnections;
+            shouldBeRemoved = false;
         }
 
 

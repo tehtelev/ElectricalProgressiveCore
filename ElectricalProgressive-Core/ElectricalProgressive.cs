@@ -11,6 +11,7 @@ using ElectricalProgressive.Utils;
 using Vintagestory.GameContent;
 using static ElectricalProgressive.ElectricalProgressive;
 using Vintagestory.API.Util;
+using Cairo;
 
 [assembly: ModDependency("game", "1.20.0")]
 [assembly: ModInfo(
@@ -32,7 +33,17 @@ namespace ElectricalProgressive
         public readonly Dictionary<BlockPos, NetworkPart> parts = new(); // Хранит все элементы всех цепей
 
         private Dictionary<BlockPos, List<EnergyPacket>> packetsByPosition = new(); //Словарь для хранения пакетов по позициям
-        private List<EnergyPacket> packetsToRemove = new (); // Список пакетов для удаления после проверки на сгорание
+
+
+        // Один двумерный массив для хранения расстояний
+        private float[,] distances;
+        private int lastConsumerCount;
+        private int lastProducerCount;
+
+        // Повторно используемые списки
+        private readonly List<Store> storeList = new List<Store>();
+        private readonly List<Customer> customerList = new List<Customer>();
+
 
         private readonly List<Consumer> consumers = new();
         private readonly List<Producer> producers = new();
@@ -127,7 +138,6 @@ namespace ElectricalProgressive
 
             sumEnergy.Clear();
             packetsByPosition.Clear();
-            packetsToRemove.Clear();
 
             sim.Reset();
             sim2.Reset();
@@ -306,74 +316,75 @@ namespace ElectricalProgressive
         /// <param name="producerPositions"></param>
         /// <param name="producerGive"></param>
         /// <param name="sim"></param>
-        private void logisticalTask(Network network, ref BlockPos[] consumerPositions, ref float[] consumerRequests,
-    ref BlockPos[] producerPositions, ref float[] producerGive, ref Simulation sim)
+        private void logisticalTask(Network network,
+                                         BlockPos[] consumerPositions,
+                                         float[] consumerRequests,
+                                         BlockPos[] producerPositions,
+                                         float[] producerGive,
+                                         Simulation sim)
         {
-            var cP = consumerPositions.Length; // Количество потребителей
-            var pP = producerPositions.Length; // Количество производителей
+            int cP = consumerPositions.Length;
+            int pP = producerPositions.Length;
 
-            float[][] distances = new float[cP][];
+            // Инициализация или переразмеривание массива расстояний
+            if (distances == null || distances.GetLength(0) < cP || distances.GetLength(1) < pP)
+            {
+                distances = new float[cP, pP];
+                lastConsumerCount = cP;
+                lastProducerCount = pP;
+            }
+            else
+            {
+                // Очищаем ранее вычисленные значения
+                Array.Clear(distances, 0, distances.Length);
+            }
 
-
+            // Вычисление расстояний
             for (int i = 0; i < cP; i++)
             {
-                distances[i] = new float[pP];
-
-
+                var start = consumerPositions[i];
                 for (int j = 0; j < pP; j++)
                 {
-                    var start = consumerPositions[i];
                     var end = producerPositions[j];
-                    if (PathCacheManager.TryGet(start, end, network.version,
-                            out var cachedPath,
-                            out _,
-                            out _,
-                            out _)
-                        && cachedPath != null)
+                    if (PathCacheManager.TryGet(start, end, network.version, out var cache, out _, out _, out _) && cache != null)
                     {
-
-                        distances[i][j] = cachedPath.Length;
-
+                        distances[i, j] = cache.Length;
                     }
                     else
                     {
-                        var (path, facing, processed, usedConn) = pathFinder.FindShortestPath(start, end, network, parts);
+                        var (path, facing, processed, used) = pathFinder.FindShortestPath(start, end, network, parts);
+                        distances[i, j] = path?.Length ?? float.MaxValue;
                         if (path != null)
-                        {
-                            distances[i][j] = path.Length;
-
-                            PathCacheManager.AddOrUpdate(start, end, network.version, path, facing, processed, usedConn);
-                        }
-                        else
-                        {
-                            distances[i][j] = float.MaxValue;
-                        }
+                            PathCacheManager.AddOrUpdate(start, end, network.version, path, facing, processed, used);
                     }
                 }
             }
-            Store[] stores;
-            Customer[] customers;
-            Dictionary<Store, float> distFromCustomerToStore;
 
-            stores = new Store[pP];
+            // Формирование списка магазинов
+            storeList.Clear();
             for (int j = 0; j < pP; j++)
-                stores[j] = new Store(j + 1, producerGive[j]);
+                storeList.Add(new Store(j + 1, producerGive[j]));
 
-            customers = new Customer[cP];
-
+            // Формирование списка клиентов
+            customerList.Clear();
             for (int i = 0; i < cP; i++)
             {
-                distFromCustomerToStore = new Dictionary<Store, float>();
+                // Собираем словарь расстояний для текущего клиента
+                var dict = new Dictionary<Store, float>(pP);
                 for (int j = 0; j < pP; j++)
-                    distFromCustomerToStore.Add(stores[j], distances[i][j]);
-                customers[i] = new Customer(i + 1, consumerRequests[i], distFromCustomerToStore);
+                    dict[storeList[j]] = distances[i, j];
+
+                customerList.Add(new Customer(i + 1, consumerRequests[i], dict));
             }
 
-            // Добавляем магазины и клиентов в симуляцию
-            sim.Stores.AddRange(stores);
-            sim.Customers.AddRange(customers);
+            // Обновляем симуляцию
+            sim.Stores.Clear();
+            sim.Stores.AddRange(storeList);
 
-            sim.Run(); // Запускаем симуляцию для распределения энергии между потребителями и производителями
+            sim.Customers.Clear();
+            sim.Customers.AddRange(customerList);
+
+            sim.Run();
         }
 
 
@@ -456,9 +467,7 @@ namespace ElectricalProgressive
                 }
 
                 // Этап 4: Распределение энергии ----------------------------------------------------------------------------
-                sim.Reset();                                                        // Сбрасываем состояние симуляции
-                logisticalTask(network, ref consumerPositions, ref consumerRequests, ref producerPositions, ref producerGive,
-                    ref sim);
+                logisticalTask(network, consumerPositions, consumerRequests, producerPositions, producerGive, sim);
 
 
 
@@ -466,16 +475,23 @@ namespace ElectricalProgressive
                 {
                     BlockPos posStore; // Позиция магазина в мире
                     BlockPos posCustomer; // Позиция потребителя в мире
+                    Customer customer; // Временная переменная для потребителя
+                    Store store;    // Временная переменная для магазина
+                    int customCount = sim.Customers.Count; // Количество клиентов в симуляции 2
+                    int storeCount = sim.Stores.Count; // Количество магазинов в симуляции 2
 
-                    foreach (var customer in sim.Customers)
+                    for (int i = 0; i < customCount; i++)
                     {
-                        foreach (var store in sim.Stores)
+                        customer = sim.Customers[i];
+
+                        for (int k = 0; k < storeCount; k++)
                         {
+                            store = sim.Stores[k];
 
                             if (customer.Received.TryGetValue(store, out var value))
                             {
-                                posStore = producerPositions[sim.Stores.IndexOf(store)];
-                                posCustomer = consumerPositions[sim.Customers.IndexOf(customer)];
+                                posStore = producerPositions[k];
+                                posCustomer = consumerPositions[i];
 
                                 if (PathCacheManager.TryGet(posCustomer, posStore, network.version, out var path, out var facing, out var processed, out var usedConn))
                                 {
@@ -568,23 +584,27 @@ namespace ElectricalProgressive
 
 
                 // Этап 8: Распределение энергии для аккумуляторов ----------------------------------------------------------------------------
-                sim2.Reset();            // Сбрасываем состояние симуляции
-                logisticalTask(network, ref consumer2Positions, ref consumer2Requests, ref producer2Positions, ref producer2Give, ref sim2);
+                logisticalTask(network, consumer2Positions, consumer2Requests, producer2Positions, producer2Give, sim2);
 
                 if (!instant) // Медленная передача
                 {
                     BlockPos posStore; // Позиция магазина в мире
                     BlockPos posCustomer; // Позиция потребителя в мире
+                    Customer customer; // Временная переменная для потребителя
+                    Store store;    // Временная переменная для магазина
+                    int customCount= sim2.Customers.Count; // Количество клиентов в симуляции 2
+                    int storeCount= sim2.Stores.Count; // Количество магазинов в симуляции 2
 
-                    foreach (var customer in sim2.Customers)
+                    for (int i=0; i< customCount; i++)
                     {
-                        foreach (var store in sim2.Stores)
+                        customer = sim2.Customers[i];
+                        for (int k = 0; k < storeCount; k++)
                         {
-
+                            store = sim2.Stores[k];
                             if (customer.Received.TryGetValue(store, out var value))
                             {
-                                posStore = producer2Positions[sim2.Stores.IndexOf(store)];
-                                posCustomer = consumer2Positions[sim2.Customers.IndexOf(customer)];
+                                posStore = producer2Positions[k];
+                                posCustomer = consumer2Positions[i];
 
                                 if (PathCacheManager.TryGet(posCustomer, posStore, network.version, out var path, out var facing, out var processed, out var usedConn))
                                 {
@@ -621,9 +641,10 @@ namespace ElectricalProgressive
                 int j = 0;
                 if (instant) // Мгновенная передача
                 {
+                    float totalGive;
                     foreach (var accum in accums)
                     {
-                        var totalGive = sim2.Customers[j].Required - sim2.Customers[j].Remaining;
+                        totalGive = sim2.Customers[j].Required - sim2.Customers[j].Remaining;
                         accum.ElectricAccum.Store(totalGive);
                         j++;
                     }
@@ -799,7 +820,7 @@ namespace ElectricalProgressive
                             }
                         }
 
-                        globalEnergyPackets.RemoveAt(i); //удаляем пакеты, которые не могут быть переданы дальше
+                        globalEnergyPackets[i].shouldBeRemoved = true;
                     }
                     else
                     {
@@ -845,9 +866,7 @@ namespace ElectricalProgressive
                                     bool sign = true;
                                     
                                     if (delta.X < 0)    sign = !sign;
-                                   
                                     if (delta.Y < 0)    sign = !sign;
-
                                     if (delta.Z < 0)    sign = !sign;
 
                                     // 2) Прописываем токи на нужные грани
@@ -867,7 +886,7 @@ namespace ElectricalProgressive
                                     // 3) Если энергия пакета почти нулевая — удаляем пакет
                                     if (packet.energy <= 0.001f)
                                     {
-                                        globalEnergyPackets.RemoveAt(i);
+                                        globalEnergyPackets[i].shouldBeRemoved = true;
                                     }
 
 
@@ -877,13 +896,13 @@ namespace ElectricalProgressive
                                     // если все же путь не совпадает с путем в пакете, то чистим кэши
                                     PathCacheManager.RemoveAll(packet.path[0], packet.path.Last());
 
-                                    globalEnergyPackets.RemoveAt(i);
+                                    globalEnergyPackets[i].shouldBeRemoved = true;
 
                                 }
                             }
                             else
                             {
-                                globalEnergyPackets.RemoveAt(i);
+                                globalEnergyPackets[i].shouldBeRemoved = true;
                             }
                         }
                         else
@@ -891,8 +910,7 @@ namespace ElectricalProgressive
                             // если все же части сети не найдены, то тут точно кэш надо утилизировать
                             PathCacheManager.RemoveAll(packet.path[0], packet.path.Last());
 
-                            globalEnergyPackets.RemoveAt(i);
-
+                            globalEnergyPackets[i].shouldBeRemoved = true;
                         }
 
                     }
@@ -913,20 +931,22 @@ namespace ElectricalProgressive
 
                 // Этап 13: Проверка сгорания проводов и трансформаторов ----------------------------------------------------------------------------
 
-
-                packetsToRemove.Clear(); // Список пакетов для удаления после проверки на сгорание
-                                         // раньше его использовать нет смысла
-
                 packetsByPosition.Clear();
+
+                // Создаем словарь для хранения пакетов по позициям
                 foreach (var packet2 in globalEnergyPackets)
                 {
-                    pos = packet2.path[packet2.currentIndex];
-                    if (!packetsByPosition.TryGetValue(pos, out var list))
+                    if (!packet2.shouldBeRemoved) // Проверяем, что пакет не помечен для удаления
                     {
-                        list = new List<EnergyPacket>();
-                        packetsByPosition[pos] = list;
+                        pos = packet2.path[packet2.currentIndex];
+                        if (!packetsByPosition.TryGetValue(pos, out var list))
+                        {
+                            list = new List<EnergyPacket>();
+                            packetsByPosition[pos] = list;
+                        }
+
+                        list.Add(packet2);
                     }
-                    list.Add(packet2);
                 }
 
 
@@ -952,58 +972,60 @@ namespace ElectricalProgressive
                               damageManager!.DamageByEnvironment(this.sapi, ref part, ref bAccessor);
                     k++;
 
-
+                    
                     if (updated)
                     {
-
                         for (int faceIndex = 0; faceIndex < 6; faceIndex++)
                         {
                             faceParams = part.eparams[faceIndex];
                             if (faceParams.voltage == 0 || !faceParams.burnout)
                                 continue;
-
                             
-                            ResetComponents(ref part);
+                            ResetComponents(ref part); // сброс компонентов сети
                         }
 
                     }
 
 
-                    // Обработка трансформаторов
-                    if (part.Transformator != null && packetsByPosition.TryGetValue(partPos, out var packets))
+                    // Обрабатываем пакеты в этой части сети
+                    if (packetsByPosition.TryGetValue(partPos, out var packets))
                     {
-                        totalEnergy = 0f;
-                        totalCurrent = 0f;
+                        // Обработка трансформаторов
+                        if (part.Transformator != null)
+                        {
+                            totalEnergy = 0f;
+                            totalCurrent = 0f;
 
+                            foreach (var packet2 in packets)
+                            {
+
+                                totalEnergy += packet2.energy;
+                                totalCurrent += packet2.energy / packet2.voltage;
+
+
+                                if (packet2.voltage == part.Transformator.highVoltage)
+                                    packet2.voltage = part.Transformator.lowVoltage;
+                                else if (packet2.voltage == part.Transformator.lowVoltage)
+                                    packet2.voltage = part.Transformator.highVoltage;
+
+                            }
+
+
+                            int transformatorFaceIndex =
+                                FacingHelper.GetFaceIndex(
+                                    FacingHelper.FromFace(FacingHelper.Faces(part.Connection)
+                                        .First())); // Индекс грани трансформатора!
+
+                            part.current[transformatorFaceIndex] = totalCurrent;
+
+                            part.Transformator.setPower(totalEnergy);
+                            part.Transformator.Update();
+                        }
+                    
+
+                        // Проверка на превышение напряжения
                         foreach (var packet2 in packets)
                         {
-
-                            totalEnergy += packet2.energy;
-                            totalCurrent += packet2.energy / packet2.voltage;
-
-
-                            if (packet2.voltage == part.Transformator.highVoltage)
-                                packet2.voltage = part.Transformator.lowVoltage;
-                            else if (packet2.voltage == part.Transformator.lowVoltage)
-                                packet2.voltage = part.Transformator.highVoltage;
-
-                        }
-
-
-                        int transformatorFaceIndex = FacingHelper.GetFaceIndex(FacingHelper.FromFace(FacingHelper.Faces(part.Connection).First())); // Индекс грани трансформатора!
-
-                        part.current[transformatorFaceIndex] = totalCurrent;
-
-                        part.Transformator.setPower(totalEnergy);
-                        part.Transformator.Update();
-                    }
-
-                    // Проверка на превышение напряжения
-                    if (packetsByPosition.TryGetValue(partPos, out var positionPackets))
-                    {
-                        foreach (var packet2 in positionPackets)
-                        {
-
                             lastFaceIndex = packet2.facingFrom[packet2.currentIndex];
 
                             faceParams = part.eparams[lastFaceIndex];
@@ -1012,13 +1034,14 @@ namespace ElectricalProgressive
                                 part.eparams[lastFaceIndex].prepareForBurnout(2);
 
                                 if (packet2.path[packet2.currentIndex] == partPos)
-                                    packetsToRemove.Add(packet2);
+                                    packet2.shouldBeRemoved = true;
 
 
                                 ResetComponents(ref part);
                                 break;
                             }
                         }
+
                     }
 
                     // Проверка на превышение тока
@@ -1032,12 +1055,15 @@ namespace ElectricalProgressive
 
                         part.eparams[faceIndex].prepareForBurnout(1);
 
-                        packetsToRemove.AddRange(
-                            globalEnergyPackets.Where(p =>
-                                p.path[p.currentIndex] == partPos &&
-                                p.nowProcessedFaces.LastOrDefault()?[faceIndex] == true
-                            )
-                        );
+
+                        foreach (var p in globalEnergyPackets)
+                        {
+                            if (p.path[p.currentIndex] == partPos &&
+                                p.nowProcessedFaces.LastOrDefault()?[faceIndex] == true)
+                            {
+                                p.shouldBeRemoved = true;
+                            }
+                        }
 
                         ResetComponents(ref part);
                     }
@@ -1048,10 +1074,10 @@ namespace ElectricalProgressive
                 if (envUpdater > 19)
                     envUpdater = 0;
 
-                // Пакетное удаление
-                globalEnergyPackets.RemoveAll(p => packetsToRemove.Contains(p));
-                packetsToRemove.Clear();
 
+
+                //Удаление ненужных пакетов
+                globalEnergyPackets.RemoveAll(p => p.shouldBeRemoved);
 
 
 

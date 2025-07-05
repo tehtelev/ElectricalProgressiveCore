@@ -11,7 +11,7 @@ namespace ElectricalProgressive.Utils
     public static class ParticleManager
     {
         // шаблон «электрических искр»
-        private static readonly SimpleParticleProperties SparksTemplate = new SimpleParticleProperties(
+        private static readonly SimpleParticleProperties SparksTemplate = new(
             minQuantity: 5, maxQuantity: 10,
             color: ColorUtil.ColorFromRgba(155, 255, 255, 83),
             minPos: new Vec3d(), maxPos: new Vec3d(0.1, 0.0, 0.1),
@@ -31,7 +31,7 @@ namespace ElectricalProgressive.Utils
         };
 
         // шаблон «чёрного дыма»
-        private static readonly SimpleParticleProperties SmokeTemplate = new SimpleParticleProperties(
+        private static readonly SimpleParticleProperties SmokeTemplate = new(
             minQuantity: 1, maxQuantity: 1,
             color: ColorUtil.ColorFromRgba(50, 50, 50, 200),
             minPos: new Vec3d(), maxPos: new Vec3d(0.8, 0.1, 0.8),
@@ -49,7 +49,7 @@ namespace ElectricalProgressive.Utils
         };
 
         // шаблон «белого дыма» для дымовых труб
-        private static readonly SimpleParticleProperties WhiteSmokeTemplate = new SimpleParticleProperties(
+        private static readonly SimpleParticleProperties WhiteSmokeTemplate = new(
             minQuantity: 1, maxQuantity: 1,
             color: ColorUtil.ColorFromRgba(210, 210, 210, 200),
             minPos: new Vec3d(-0.1, -0.1, -0.1), maxPos: new Vec3d(0.1, 0.1, 0.1),
@@ -66,7 +66,7 @@ namespace ElectricalProgressive.Utils
 
 
         // шаблон «белого дыма» подготовки сгореть
-        private static readonly SimpleParticleProperties WhiteSlowSmokeTemplate = new SimpleParticleProperties(
+        private static readonly SimpleParticleProperties WhiteSlowSmokeTemplate = new(
             minQuantity: 1, maxQuantity: 1,
             color: ColorUtil.ColorFromRgba(210, 210, 210, 200),
             minPos: new Vec3d(), maxPos: new Vec3d(0.8, 0.1, 0.8),

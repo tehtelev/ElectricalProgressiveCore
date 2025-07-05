@@ -8,8 +8,8 @@ namespace ElectricalProgressive.Utils
 {
     public class Simulation
     {
-        public List<Customer> Customers { get; } = new List<Customer>();
-        public List<Store> Stores { get; } = new List<Store>();
+        public List<Customer> Customers { get; } = new();
+        public List<Store> Stores { get; } = new();
 
         public void Run()
         {
@@ -40,7 +40,8 @@ namespace ElectricalProgressive.Utils
                 for (int c = 0; c < Customers.Count; c++)
                 {
                     var customer = Customers[c];
-                    if (customer.Remaining <= 0.001f) continue;
+                    if (customer.Remaining <= 0.001f)
+                        continue;
 
                     float remaining = customer.Remaining;
                     var availableStores = customer.GetAvailableStores();
@@ -91,13 +92,15 @@ namespace ElectricalProgressive.Utils
             for (int s = 0; s < stores.Length; s++)
             {
                 var store = stores[s];
-                if (store.Stock <= 0.001f && store.ImNull) continue;
+                if (store.Stock <= 0.001f && store.ImNull)
+                    continue;
 
                 float requested = remaining;
                 store.CurrentRequests[customer] = requested;
                 remaining -= requested;
 
-                if (remaining <= 0.001f) break;
+                if (remaining <= 0.001f)
+                    break;
             }
         }
 
@@ -105,13 +108,15 @@ namespace ElectricalProgressive.Utils
         {
             foreach (var store in stores)
             {
-                if (store.Stock <= 0.001f && store.ImNull) continue;
+                if (store.Stock <= 0.001f && store.ImNull)
+                    continue;
 
                 float requested = remaining;
                 store.CurrentRequests[customer] = requested;
                 remaining -= requested;
 
-                if (remaining <= 0.001f) break;
+                if (remaining <= 0.001f)
+                    break;
             }
         }
 
