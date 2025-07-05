@@ -59,6 +59,18 @@ public enum Facing {
 
 public static class FacingHelper
 {
+    private static readonly BlockFacing[] blockfaces = {
+        BlockFacing.NORTH,
+        BlockFacing.EAST,
+        BlockFacing.SOUTH,
+        BlockFacing.WEST,
+        BlockFacing.UP,
+        BlockFacing.DOWN
+    };
+
+
+
+
     public static Facing FromFace(BlockFacing face)
     {
         if (face == null)
@@ -79,6 +91,7 @@ public static class FacingHelper
     {
         if (direction == null)
             return Facing.None;
+
         return direction.Index switch
         {
             BlockFacing.indexNORTH => Facing.AllNorth,
@@ -99,17 +112,10 @@ public static class FacingHelper
     /// <returns></returns>
     public static BlockFacing BlockFacingFromIndex(int flag)
     {
-        return flag switch
-        {
-            0 => BlockFacing.NORTH,
-            1 => BlockFacing.EAST,
-            2 => BlockFacing.SOUTH,
-            3 => BlockFacing.WEST,
-            4 => BlockFacing.UP,
-            5 => BlockFacing.DOWN,
-            _ => null!,
-        };
+        return (flag >= 0 && flag < blockfaces.Length) ? blockfaces[flag] : null!;
     }
+
+
 
 
     public static Facing From(BlockFacing face, BlockFacing direction)
@@ -121,56 +127,61 @@ public static class FacingHelper
 
 
 
-
+    /// <summary>
+    /// Выдает все направления, которые соответствуют флагам Face.
+    /// </summary>
+    /// <param name="self"></param>
+    /// <returns></returns>
     public static IEnumerable<BlockFacing> Faces(Facing self)
     {
-        return new[]
-        {
-            (self & Facing.NorthAll) != 0
-                ? BlockFacing.NORTH
-                : null,
-            (self & Facing.EastAll) != 0
-                ? BlockFacing.EAST
-                : null,
-            (self & Facing.SouthAll) != 0
-                ? BlockFacing.SOUTH
-                : null,
-            (self & Facing.WestAll) != 0
-                ? BlockFacing.WEST
-                : null,
-            (self & Facing.UpAll) != 0
-                ? BlockFacing.UP
-                : null,
-            (self & Facing.DownAll) != 0
-                ? BlockFacing.DOWN
-                : null
-        }.Where(face => face is not null).Select(face => face!);
+        var result = new List<BlockFacing>(6);
+
+        if ((self & Facing.NorthAll) != 0)
+            result.Add(BlockFacing.NORTH);
+        if ((self & Facing.EastAll) != 0)
+            result.Add(BlockFacing.EAST);
+        if ((self & Facing.SouthAll) != 0)
+            result.Add(BlockFacing.SOUTH);
+        if ((self & Facing.WestAll) != 0)
+            result.Add(BlockFacing.WEST);
+        if ((self & Facing.UpAll) != 0)
+            result.Add(BlockFacing.UP);
+        if ((self & Facing.DownAll) != 0)
+            result.Add(BlockFacing.DOWN);
+
+        return result;
     }
 
+
+    /// <summary>
+    /// Выдает все направления, которые соответствуют флагам Directions.
+    /// </summary>
+    /// <param name="self"></param>
+    /// <returns></returns>
     public static IEnumerable<BlockFacing> Directions(Facing self)
     {
-        return new[]
-        {
-            (self & Facing.AllNorth) != 0
-                ? BlockFacing.NORTH
-                : null,
-            (self & Facing.AllEast) != 0
-                ? BlockFacing.EAST
-                : null,
-            (self & Facing.AllSouth) != 0
-                ? BlockFacing.SOUTH
-                : null,
-            (self & Facing.AllWest) != 0
-                ? BlockFacing.WEST
-                : null,
-            (self & Facing.AllUp) != 0
-                ? BlockFacing.UP
-                : null,
-            (self & Facing.AllDown) != 0
-                ? BlockFacing.DOWN
-                : null
-        }.Where(face => face is not null).Select(face => face!);
+        var result = new List<BlockFacing>(6);
+
+        if ((self & Facing.AllNorth) != 0)
+            result.Add(BlockFacing.NORTH);
+        if ((self & Facing.AllEast) != 0)
+            result.Add(BlockFacing.EAST);
+        if ((self & Facing.AllSouth) != 0)
+            result.Add(BlockFacing.SOUTH);
+        if ((self & Facing.AllWest) != 0)
+            result.Add(BlockFacing.WEST);
+        if ((self & Facing.AllUp) != 0)
+            result.Add(BlockFacing.UP);
+        if ((self & Facing.AllDown) != 0)
+            result.Add(BlockFacing.DOWN);
+
+        return result;
     }
+
+    
+
+
+
 
     public static Facing FullFace(Facing self)
     {

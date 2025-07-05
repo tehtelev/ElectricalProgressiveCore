@@ -63,24 +63,15 @@ namespace ElectricalProgressive.Utils
         /// </summary>
         public void UpdateOrderedStores()
         {
-            // Преобразуем словарь в массив пар для сортировки
-            var stores = new KeyValuePair<Store, float>[StoreDistances.Count];
-            int i = 0;
-            foreach (var kvp in StoreDistances)
+            var items = StoreDistances.ToArray();
+            Array.Sort(items, (a, b) => a.Value.CompareTo(b.Value));
+            _orderedStores = new Store[items.Length];
+            for (int i = 0; i < items.Length; i++)
             {
-                stores[i++] = kvp;
-            }
-
-            // Сортируем массив по расстоянию
-            Array.Sort(stores, (x, y) => x.Value.CompareTo(y.Value));
-
-            // Извлекаем отсортированные магазины
-            _orderedStores = new Store[stores.Length];
-            for (int j = 0; j < stores.Length; j++)
-            {
-                _orderedStores[j] = stores[j].Key;
+                _orderedStores[i] = items[i].Key;
             }
         }
+        
 
         /// <summary>
         /// Возвращает доступные магазины в порядке увеличения расстояния

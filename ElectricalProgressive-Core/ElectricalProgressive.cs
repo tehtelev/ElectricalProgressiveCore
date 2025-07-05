@@ -9,15 +9,8 @@ using Vintagestory.API.Config;
 using ElectricalProgressive.Interface;
 using ElectricalProgressive.Utils;
 using Vintagestory.GameContent;
-using System.Threading.Channels;
 using static ElectricalProgressive.ElectricalProgressive;
-using ProtoBuf;
 using Vintagestory.API.Util;
-using System.Net.Sockets;
-using System.Collections.Concurrent;
-using System.Threading.Tasks;
-using System.Diagnostics;
-using Vintagestory.API.Datastructures;
 
 [assembly: ModDependency("game", "1.20.0")]
 [assembly: ModInfo(
@@ -44,8 +37,6 @@ namespace ElectricalProgressive
         private readonly List<Consumer> consumers = new();
         private readonly List<Producer> producers = new();
         private readonly List<Accumulator> accums = new();
-        private readonly List<Transformator> transformators = new();
-        private readonly List<Conductor> conductors = new();
 
         private readonly List<EnergyPacket> globalEnergyPackets = new(); // Глобальный список пакетов энергии
 
@@ -123,8 +114,6 @@ namespace ElectricalProgressive
             consumers.Clear();
             producers.Clear();
             accums.Clear();
-            transformators.Clear();
-            conductors.Clear();
             globalEnergyPackets.Clear();
 
             consumerPositions = null;
@@ -294,8 +283,6 @@ namespace ElectricalProgressive
                             part.eparams[i].ticksBeforeBurnout--;                               // уменьшаем тики до сгорания
                     }
 
-                    //if (part.eparams[i].Equals(new EParams()))
-                    //    part.eparams[i] = new EParams();
                 }
                 else
                 {
@@ -339,9 +326,9 @@ namespace ElectricalProgressive
                     var end = producerPositions[j];
                     if (PathCacheManager.TryGet(start, end, network.version,
                             out var cachedPath,
-                            out var cachedFacing,
-                            out var cachedProcessed,
-                            out var cachedConnections)
+                            out _,
+                            out _,
+                            out _)
                         && cachedPath != null)
                     {
 
@@ -416,9 +403,6 @@ namespace ElectricalProgressive
                 producers.Clear();
                 consumers.Clear();
                 accums.Clear();
-                transformators.Clear();
-                conductors.Clear();
-
 
 
                 // Этап 2: Сбор запросов от потребителей----------------------------------------------------------------------------
@@ -804,7 +788,7 @@ namespace ElectricalProgressive
 
                             if (isValid)
                             {
-                                if (sumEnergy.TryGetValue(pos, out var value))
+                                if (sumEnergy.TryGetValue(pos, out _))
                                 {
                                     sumEnergy[pos] += packet.energy;
                                 }
@@ -1490,11 +1474,12 @@ namespace ElectricalProgressive
                 (part, a) => part.Accumulator = a,
                 network => network.Accumulators);
 
+
         /// <summary>
         /// Задать трансформатор
         /// </summary>
         /// <param name="position"></param>
-        /// <param name="accumulator"></param>
+        /// <param name="transformator"></param>
         public void SetTransformator(BlockPos position, IElectricTransformator? transformator) =>
             SetComponent(
                 position,

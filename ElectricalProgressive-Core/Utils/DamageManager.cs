@@ -25,19 +25,17 @@ namespace ElectricalProgressive.Utils
         };
 
         //сила отталкивания
-        private static  double KNOCKBACK_STRENGTH = 0.4;
+        private const double KNOCKBACK_STRENGTH = 0.4;
 
         // Интервал в миллисекундах (2 секунды)
-        private static long DAMAGE_INTERVAL_MS = 2000;
+        private const long DAMAGE_INTERVAL_MS = 2000;
 
         // Ключ для хранения времени удара
-        private static string key = "damageByElectricity";
+        private const string key = "damageByElectricity";
+
+        public static global::ElectricalProgressive.ElectricalProgressive? System;
 
         private ICoreAPI api;
-
-        public global::ElectricalProgressive.ElectricalProgressive? System =>
-             this.api?.ModLoader.GetModSystem<global::ElectricalProgressive.ElectricalProgressive>();
-
 
 
         /// <summary>
@@ -47,6 +45,9 @@ namespace ElectricalProgressive.Utils
         public DamageManager(ICoreAPI api)
         {
             this.api = api;
+
+            // Получаем ссылку на систему ElectricalProgressive, если она есть
+            System = api?.ModLoader.GetModSystem<global::ElectricalProgressive.ElectricalProgressive>();
         }
 
 
@@ -171,7 +172,7 @@ namespace ElectricalProgressive.Utils
 
             for (int i = 0; i <= 5; i++) //перебор всех граней
             {
-                var networkInformation = this.System?.GetNetworks(pos, FacingHelper.FromFace(FacingHelper.BlockFacingFromIndex(i)));      //получаем информацию о сети
+                var networkInformation = System?.GetNetworks(pos, FacingHelper.FromFace(FacingHelper.BlockFacingFromIndex(i)));      //получаем информацию о сети
 
                 if (networkInformation?.NumberOfProducers > 0 || networkInformation?.NumberOfAccumulators > 0) //если в сети есть генераторы или аккумы
                 {
@@ -310,7 +311,7 @@ namespace ElectricalProgressive.Utils
             NetworkInformation networkInformation;
             for (int i = 0; i <= 5; i++) //перебор всех граней
             {
-                networkInformation = this.System?.GetNetworks(pos, FacingHelper.FromFace(FacingHelper.BlockFacingFromIndex(i)));      //получаем информацию о сети
+                networkInformation = System?.GetNetworks(pos, FacingHelper.FromFace(FacingHelper.BlockFacingFromIndex(i)));      //получаем информацию о сети
 
                 if (networkInformation?.Production > 0f || networkInformation?.NumberOfAccumulators > 0) //если в сети активная генерация или есть аккумы
                 {
