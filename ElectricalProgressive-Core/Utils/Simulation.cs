@@ -8,8 +8,8 @@ namespace ElectricalProgressive.Utils
 {
     public class Simulation
     {
-        public List<Customer> Customers { get; } = new();
-        public List<Store> Stores { get; } = new();
+        public List<Customer> Customers { get; set; }
+        public List<Store> Stores { get; set; }
 
         public void Run()
         {
