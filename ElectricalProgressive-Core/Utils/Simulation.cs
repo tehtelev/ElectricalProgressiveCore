@@ -8,12 +8,22 @@ namespace ElectricalProgressive.Utils
 {
     public class Simulation
     {
+        /// <summary>
+        /// Список клиентов, участвующих в симуляции.
+        /// </summary>
         public List<Customer> Customers { get; set; }
+
+        /// <summary>
+        /// Список магазинов, участвующих в симуляции.
+        /// </summary>
         public List<Store> Stores { get; set; }
 
+
+        /// <summary>
+        /// Запускает симуляцию распределения товара между клиентами и магазинами.
+        /// </summary>
         public void Run()
         {
-            // Инициализация суммарного запроса для магазинов
             for (int i = 0; i < Stores.Count; i++)
             {
                 Stores[i].totalRequest = 0;
@@ -24,19 +34,11 @@ namespace ElectricalProgressive.Utils
 
             do
             {
-                // Обновление магазинов для покупателей
-                for (int i = 0; i < Customers.Count; i++)
-                {
-                    Customers[i].UpdateOrderedStores();
-                }
-
-                // Сброс запросов магазинов
                 for (int i = 0; i < Stores.Count; i++)
                 {
                     Stores[i].ResetRequests();
                 }
 
-                // Обработка запросов покупателей
                 for (int c = 0; c < Customers.Count; c++)
                 {
                     var customer = Customers[c];
@@ -44,26 +46,15 @@ namespace ElectricalProgressive.Utils
                         continue;
 
                     float remaining = customer.Remaining;
-                    var availableStores = customer.GetAvailableStores();
-
-                    // Используем pattern matching для массива вместо IEnumerable
-                    if (availableStores is Store[] storesArray)
-                    {
-                        ProcessStoresArray(customer, remaining, storesArray);
-                    }
-                    else
-                    {
-                        ProcessStoresEnumerable(customer, remaining, availableStores);
-                    }
+                    int[] availableStoreIds = customer.GetAvailableStoreIds();
+                    ProcessStoresArray(customer, remaining, availableStoreIds);
                 }
 
-                // Обработка запросов в магазинах
                 for (int i = 0; i < Stores.Count; i++)
                 {
-                    Stores[i].ProcessRequests();
+                    Stores[i].ProcessRequests(Customers);
                 }
 
-                // Проверка условий продолжения
                 hasActiveStores = false;
                 for (int i = 0; i < Stores.Count; i++)
                 {
@@ -87,49 +78,35 @@ namespace ElectricalProgressive.Utils
             } while (hasActiveStores && hasPendingCustomers);
         }
 
-        private void ProcessStoresArray(Customer customer, float remaining, Store[] stores)
+        /// <summary>
+        /// Обрабатывает массив идентификаторов магазинов для клиента, распределяя оставшееся количество товара между магазинами.
+        /// </summary>
+        /// <param name="customer"></param>
+        /// <param name="remaining"></param>
+        /// <param name="storeIds"></param>
+        private void ProcessStoresArray(Customer customer, float remaining, int[] storeIds)
         {
-            for (int s = 0; s < stores.Length; s++)
+            for (int s = 0; s < storeIds.Length; s++)
             {
-                var store = stores[s];
+                var store = Stores[storeIds[s]];
                 if (store.Stock <= 0.001f && store.ImNull)
                     continue;
 
                 float requested = remaining;
-                store.CurrentRequests[customer] = requested;
+                store.CurrentRequests[customer.Id] = requested;
                 remaining -= requested;
 
                 if (remaining <= 0.001f)
                     break;
             }
         }
-
-        private void ProcessStoresEnumerable(Customer customer, float remaining, IEnumerable<Store> stores)
-        {
-            foreach (var store in stores)
-            {
-                if (store.Stock <= 0.001f && store.ImNull)
-                    continue;
-
-                float requested = remaining;
-                store.CurrentRequests[customer] = requested;
-                remaining -= requested;
-
-                if (remaining <= 0.001f)
-                    break;
-            }
-        }
-
 
         /// <summary>
-        /// Сбрасывает состояние симуляции, очищая магазины и клиентов.
+        /// Сбрасывает состояние симуляции, очищая списки клиентов и магазинов.
         /// </summary>
         public void Reset()
         {
-            // Сброс магазинов
             Stores.Clear();
-
-            // Сброс клиентов
             Customers.Clear();
         }
     }

@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using Vintagestory.API.Common;
 
 namespace ElectricalProgressive.Utils;
 public static class ParallelHelper
@@ -63,29 +64,27 @@ public static class ParallelHelper
     }
 
     /// <summary>
-    /// Параллельный перебор по любому IEnumerable<T>,
-    /// автоматически приводим к IList<T> для подсчёта Count().
-    /// Число потоков = min(items, coreCount), минимум 1.
+    /// Параллельный перебор 
     /// </summary>
     public static void ForEachPartitioned<T>(
         IEnumerable<T> workItemsEnumerable,
         Action<T> action)
     {
-        // приводим к IList<T> (если уже список — без копирования; иначе делаем ToList)
-        var workItems = workItemsEnumerable as IList<T>
-                        ?? workItemsEnumerable.ToList();
 
-        int items = workItems.Count;
-        int coreCount = GetCoreCountForDop();
+        int maxDop=1;
 
-        // не больше задач и не больше ядер, минимум 1
-        int maxDop = Math.Clamp(items, 1, coreCount);
-
-        var po = new ParallelOptions
+        if (ElectricalProgressive.multiThreading) // если включена многопоточность
         {
-            MaxDegreeOfParallelism = maxDop
-        };
+            int items = workItemsEnumerable.Count();
+            int coreCount = GetCoreCountForDop();
 
-        Parallel.ForEach(workItems, po, action);
+            // не больше задач и не больше ядер, минимум 1
+            maxDop = Math.Clamp(items, 1, coreCount);
+            //maxDop = 2;
+        }
+
+        var po = new ParallelOptions { MaxDegreeOfParallelism = maxDop };
+
+        Parallel.ForEach(workItemsEnumerable, po, action);
     }
 }

@@ -169,10 +169,11 @@ namespace ElectricalProgressive.Utils
 
             bool doDamage = false;
             int voltage = 0;
+            NetworkInformation networkInformation;
 
             for (int i = 0; i <= 5; i++) //перебор всех граней
             {
-                var networkInformation = System?.GetNetworks(pos, FacingHelper.FromFace(FacingHelper.BlockFacingFromIndex(i)));      //получаем информацию о сети
+                networkInformation = System?.GetNetworks(pos, FacingHelper.FromFace(FacingHelper.BlockFacingFromIndex(i)));      //получаем информацию о сети
 
                 if (networkInformation?.NumberOfProducers > 0 || networkInformation?.NumberOfAccumulators > 0) //если в сети есть генераторы или аккумы
                 {

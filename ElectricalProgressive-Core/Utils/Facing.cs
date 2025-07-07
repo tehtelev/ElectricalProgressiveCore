@@ -129,53 +129,48 @@ public static class FacingHelper
 
     /// <summary>
     /// Выдает все направления, которые соответствуют флагам Face.
+    /// Использовать ToList() вне foreach, и если нужно получить весь список
     /// </summary>
     /// <param name="self"></param>
     /// <returns></returns>
     public static IEnumerable<BlockFacing> Faces(Facing self)
     {
-        var result = new List<BlockFacing>(6);
-
         if ((self & Facing.NorthAll) != 0)
-            result.Add(BlockFacing.NORTH);
+            yield return BlockFacing.NORTH;
         if ((self & Facing.EastAll) != 0)
-            result.Add(BlockFacing.EAST);
+            yield return BlockFacing.EAST;
         if ((self & Facing.SouthAll) != 0)
-            result.Add(BlockFacing.SOUTH);
+            yield return BlockFacing.SOUTH;
         if ((self & Facing.WestAll) != 0)
-            result.Add(BlockFacing.WEST);
+            yield return BlockFacing.WEST;
         if ((self & Facing.UpAll) != 0)
-            result.Add(BlockFacing.UP);
+            yield return BlockFacing.UP;
         if ((self & Facing.DownAll) != 0)
-            result.Add(BlockFacing.DOWN);
-
-        return result;
+            yield return BlockFacing.DOWN;
     }
+
 
 
     /// <summary>
     /// Выдает все направления, которые соответствуют флагам Directions.
+    /// Использовать ToList() вне foreach, и если нужно получить весь список
     /// </summary>
     /// <param name="self"></param>
     /// <returns></returns>
     public static IEnumerable<BlockFacing> Directions(Facing self)
     {
-        var result = new List<BlockFacing>(6);
-
         if ((self & Facing.AllNorth) != 0)
-            result.Add(BlockFacing.NORTH);
+            yield return BlockFacing.NORTH;
         if ((self & Facing.AllEast) != 0)
-            result.Add(BlockFacing.EAST);
+            yield return BlockFacing.EAST;
         if ((self & Facing.AllSouth) != 0)
-            result.Add(BlockFacing.SOUTH);
+            yield return BlockFacing.SOUTH;
         if ((self & Facing.AllWest) != 0)
-            result.Add(BlockFacing.WEST);
+            yield return BlockFacing.WEST;
         if ((self & Facing.AllUp) != 0)
-            result.Add(BlockFacing.UP);
+            yield return BlockFacing.UP;
         if ((self & Facing.AllDown) != 0)
-            result.Add(BlockFacing.DOWN);
-
-        return result;
+            yield return BlockFacing.DOWN;
     }
 
     
@@ -185,7 +180,7 @@ public static class FacingHelper
 
     public static Facing FullFace(Facing self)
     {
-        return Faces(self).Aggregate(Facing.None, (current, face) => current | FromFace(face));
+        return Faces(self).ToList().Aggregate(Facing.None, (current, face) => current | FromFace(face));
     }
 
 

@@ -1,47 +1,70 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Vintagestory.API.MathTools;
 
 namespace ElectricalProgressive.Utils
 {
     public class Store
     {
+        /// <summary>
+        /// Уникальный идентификатор магазина.
+        /// </summary>
         public int Id { get; }
-        public float Stock { get; set; }
-        public Dictionary<Customer, float> CurrentRequests { get; } = new Dictionary<Customer, float>();
-        public bool ImNull { get; private set; }
-        public Dictionary<Store, float> StoresOrders { get; } = new Dictionary<Store, float>();
-        public float totalRequest;
-
-        public Store(int id, float stock) => (Id, Stock) = (id, stock);
-        public double DistanceTo(Customer customer) => customer.StoreDistances[this];
 
         /// <summary>
-        /// Сбрасывает текущие запросы перед новым раундом распределения
+        /// Текущее количество товара в магазине.
         /// </summary>
-        public void ResetRequests()
+        public float Stock { get; set; }
+
+        /// <summary>
+        /// Массив текущих запросов от клиентов, индекс соответствует Id клиента.
+        /// </summary>
+        public float[] CurrentRequests { get; } // Requests from each customer by customer Id
+
+        /// <summary>
+        /// Флаг, указывающий, что магазин больше не имеет товара.
+        /// </summary>
+        public bool ImNull { get; private set; }
+
+        /// <summary>
+        /// Общее количество товара, запрошенного от магазина за все время.
+        /// </summary>
+        public float totalRequest;
+
+        /// <summary>
+        /// Инициализирует новый экземпляр класса Store.
+        /// </summary>
+        /// <param name="id"></param>
+        /// <param name="stock"></param>
+        /// <param name="numCustomers"></param>
+        public Store(int id, float stock, int numCustomers)
         {
-            CurrentRequests.Clear();
+            Id = id;
+            Stock = stock;
+            CurrentRequests = new float[numCustomers];
         }
 
         /// <summary>
-        /// Обрабатывает все накопленные запросы клиентов
+        /// Сбрасывает текущие запросы от клиентов.
         /// </summary>
-        public void ProcessRequests()
+        public void ResetRequests()
         {
-            // Ручной подсчет суммы запросов вместо LINQ
+            Array.Clear(CurrentRequests, 0, CurrentRequests.Length);
+        }
+
+        /// <summary>
+        /// Обрабатывает запросы от клиентов и распределяет товар по запросам.
+        /// </summary>
+        /// <param name="customers"></param>
+        public void ProcessRequests(List<Customer> customers)
+        {
             float totalRequested = 0;
-            foreach (var request in CurrentRequests)
+            for (int i = 0; i < CurrentRequests.Length; i++)
             {
-                totalRequested += request.Value;
+                totalRequested += CurrentRequests[i];
             }
 
             totalRequest += totalRequested;
 
-            // Ранний выход если нет запасов
             if (Stock <= 0.001f)
             {
                 Stock = 0.0f;
@@ -52,17 +75,31 @@ namespace ElectricalProgressive.Utils
 
             if (totalRequested == 0) return;
 
-            // Обработка двух сценариев: достаточно запасов или нехватка
             if (Stock >= totalRequested)
             {
-                ProcessFullRequests();
+                for (int i = 0; i < CurrentRequests.Length; i++)
+                {
+                    if (CurrentRequests[i] > 0)
+                    {
+                        customers[i].Received[Id] += CurrentRequests[i];
+                        Stock -= CurrentRequests[i];
+                    }
+                }
             }
             else
             {
-                ProcessPartialRequests(totalRequested);
+                float ratio = Stock / totalRequested;
+                for (int i = 0; i < CurrentRequests.Length; i++)
+                {
+                    if (CurrentRequests[i] > 0)
+                    {
+                        float allocated = CurrentRequests[i] * ratio;
+                        customers[i].Received[Id] += allocated;
+                        Stock -= allocated;
+                    }
+                }
             }
 
-            // Финализация статуса магазина
             if (Stock <= 0.001f)
             {
                 Stock = 0.0f;
@@ -70,41 +107,6 @@ namespace ElectricalProgressive.Utils
             }
 
             ResetRequests();
-        }
-
-        /// <summary>
-        /// Обработка когда запасов достаточно для всех запросов
-        /// </summary>
-        private void ProcessFullRequests()
-        {
-            foreach (var request in CurrentRequests)
-            {
-                request.Key.Received[this] = request.Value;
-                Stock -= request.Value;
-            }
-        }
-
-        /// <summary>
-        /// Обработка при нехватке запасов (пропорциональное распределение)
-        /// </summary>
-        /// <param name="totalRequested">Общая сумма запросов</param>
-        private void ProcessPartialRequests(float totalRequested)
-        {
-            // Создаем снимок запросов для безопасной обработки
-            var requests = new KeyValuePair<Customer, float>[CurrentRequests.Count];
-            int i = 0;
-            foreach (var request in CurrentRequests)
-            {
-                requests[i++] = request;
-            }
-
-            float ratio = Stock / totalRequested;
-            foreach (var request in requests)
-            {
-                float allocated = request.Value * ratio;
-                request.Key.Received[this] = allocated;
-                Stock -= allocated;
-            }
         }
     }
 }
