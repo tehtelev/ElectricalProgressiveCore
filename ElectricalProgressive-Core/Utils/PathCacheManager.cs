@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using Vintagestory.API.MathTools;
 
 namespace ElectricalProgressive.Utils
 {
+    
     /// <summary>
     /// Глобальный, не зависящий от сети кэш путей с удалением по TTL.
     /// </summary>
@@ -20,7 +22,7 @@ namespace ElectricalProgressive.Utils
         }
 
         // TTL, по истечении которого неиспользуемые записи удаляются
-        private static readonly TimeSpan EntryTtl = TimeSpan.FromMinutes(1);
+        private static readonly TimeSpan EntryTtl = TimeSpan.FromMinutes(2);
 
         // Сам кэш, ключом служит только (start, end, version)
         private static readonly ConcurrentDictionary<(BlockPos, BlockPos, int), Entry> cache
@@ -65,15 +67,25 @@ namespace ElectricalProgressive.Utils
             Facing[] usedConnections)
         {
             var key = (start, end, currentVersion);
-            var entry = new Entry
-            {
-                Path = path,
-                FacingFrom = facingFrom,
-                NowProcessedFaces = nowProcessedFaces,
-                UsedConnections = usedConnections,
-                LastAccessed = DateTime.UtcNow
-            };
-            cache.AddOrUpdate(key, entry, (_, __) => entry);
+            // При обновлении существующей записи не сбрасываем LastAccessed, чтобы не мешать очистке
+            cache.AddOrUpdate(key,
+                k => new Entry
+                {
+                    Path = path,
+                    FacingFrom = facingFrom,
+                    NowProcessedFaces = nowProcessedFaces,
+                    UsedConnections = usedConnections,
+                    LastAccessed = DateTime.UtcNow
+                },
+                (k, existing) =>
+                {
+                    existing.Path = path;
+                    existing.FacingFrom = facingFrom;
+                    existing.NowProcessedFaces = nowProcessedFaces;
+                    existing.UsedConnections = usedConnections;
+                    // сохраняем existing.LastAccessed без изменения
+                    return existing;
+                });
         }
 
         /// <summary>
@@ -83,15 +95,16 @@ namespace ElectricalProgressive.Utils
         public static void Cleanup()
         {
             var cutoff = DateTime.UtcNow - EntryTtl;
-            foreach (var kvp in cache)
+
+            // Перебираем snapshot словаря и сразу удаляем устаревшие элементы
+            foreach (var pair in cache)
             {
-                if (kvp.Value.LastAccessed < cutoff)
+                if (pair.Value.LastAccessed < cutoff)
                 {
-                    cache.TryRemove(kvp.Key, out _);
+                    cache.TryRemove(pair.Key, out _);
                 }
             }
         }
-
 
 
         /// <summary>
@@ -102,22 +115,16 @@ namespace ElectricalProgressive.Utils
         {
             // Собираем ключи, которые нужно удалить, чтобы не модифицировать
             // словарь прямо во время перебора.
-            var keysToRemove = new List<(BlockPos, BlockPos, int)>();
-            foreach (var kvp in cache)
-            {
-                var key = kvp.Key;
-                if (key.Item1.Equals(start) && key.Item2.Equals(end))
-                {
-                    keysToRemove.Add(key);
-                }
-            }
+            var keysToRemove = cache
+                .Where(pair => pair.Key.Item1.Equals(start) && pair.Key.Item2.Equals(end))
+                .Select(pair => pair.Key)
+                .ToList();
 
-            // Удаляем все собранные ключи
             foreach (var key in keysToRemove)
             {
                 cache.TryRemove(key, out _);
             }
         }
-
     }
+    
 }

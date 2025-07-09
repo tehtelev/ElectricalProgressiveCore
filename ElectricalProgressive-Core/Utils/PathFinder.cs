@@ -1,70 +1,143 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Vintagestory.API.MathTools;
+using Vintagestory.API.Util;
 
 
 namespace ElectricalProgressive.Utils;
 
 public class PathFinder
 {
+    /// <summary>
+    /// Конструктор для поиска пути в сети
+    /// </summary>
+    /// <param name="net"></param>
+    /// <param name="partss"></param>
+    public PathFinder(Network net, Dictionary<BlockPos, NetworkPart> partss)
+    {
+        network = net;
+        parts = partss;
+    }
 
     /// <summary>
-    /// Реализует обход в ширину для поиска кратчайшего пути
+    /// Сеть, в которой мы ищем путь
     /// </summary>
-    /// <param name="start"></param>
-    /// <param name="end"></param>
-    /// <param name="networkPositions"></param>
-    /// <returns></returns>
-    public (BlockPos[], int[], bool[][], Facing[]) FindShortestPath(BlockPos start, BlockPos end, Network network, Dictionary<BlockPos, NetworkPart> parts)
+    private Network network;
+
+    /// <summary>
+    /// Словарь частей сети
+    /// </summary>
+    private Dictionary<BlockPos, NetworkPart> parts;
+
+
+
+
+    /// <summary>
+    /// Массив масок граней для фильтрации соединений
+    /// </summary>
+    private static Facing[] faceMasks =
     {
+        Facing.NorthAll, Facing.EastAll, Facing.SouthAll, Facing.WestAll, Facing.UpAll, Facing.DownAll
+    };
+
+
+
+    // Переменные используемые в GetNeighbors, чтобы избежать очень частых аллокаций
+    private List<BlockPos> Neighbors = new();      // координата соседа
+    private List<int> NeighborsFace = new();            // грань соседа с которым мы взаимодействовать будем
+    private bool[] NowProcessed = new bool[6];                    // задействованные грани в этой точке
+    private Queue<int> queue2 = new();
+    private bool[] processFacesBuf = new bool[6];
+    private BlockPos neighborPosition;
+
+    // Переменные используемые в FindShortestPath, чтобы избежать очень частых аллокаций
+    private List<int> startBlockFacing = new();
+    private List<int> endBlockFacing = new();
+    private Queue<(BlockPos, int)> queue = new();
+    private Dictionary<(BlockPos, int), (BlockPos, int)> cameFrom = new();
+    private List<BlockPos> cameFromList = new();
+    private Dictionary<BlockPos, bool[]> processedFaces = new();
+    private Dictionary<(BlockPos, int), int> facingFrom = new();
+    private Dictionary<(BlockPos, int), bool[]> nowProcessedFaces = new();
+    private HashSet<BlockPos> networkPositions = new();
+    private List<BlockPos> buf1=new();     //список соседей
+    private List<int> buf2=new();          //список граней соседей
+    private bool[] buf3;            //список граней, которые сейчас в работе
+    private bool[] buf4;            //список граней, которые уже просчитаны
+    private BlockPos currentPos;    //текущая позиция
+    private int currentFace;        //текущая грань
+
+
+
+
+
+
+    public (BlockPos[], int[], bool[][], Facing[]) FindShortestPath(BlockPos start, BlockPos end)
+    {
+        // очищаем предыдущие данные
+        startBlockFacing.Clear();
+        endBlockFacing.Clear();
+        queue.Clear();
+        cameFrom.Clear();
+        cameFromList.Clear();
+        facingFrom.Clear();
+        nowProcessedFaces.Clear();
+        processedFaces.Clear();
+        buf1.Clear();
+        buf2.Clear();
+        buf3 = Array.Empty<bool>();
+        buf4 = Array.Empty<bool>();
+
+
+
+
+
+        networkPositions = network.PartPositions; // ни в коем случае не очищать
 
         //проверяем наличие начальной и конечной точки в этой цепи
-        var networkPositions = network.PartPositions;
         if (!networkPositions.Contains(start) || !networkPositions.Contains(end))
             return (null!, null!, null!, null!);
 
 
         //смотрим с какой грани начинать
         var startConnection = parts[start].Connection;
-        var startBlockFacing = new List<int>();
         foreach (var face in FacingHelper.Faces(startConnection))
         {
             startBlockFacing.Add(face.Index);
         }
 
 
-        // startBlockFacing[0] и endBlockFacing[0] будут работать корректно до тех пор пока не появятся источники и приемники энергии, у которых несколько граней на передачу и прием!!!!
+        // startBlockFacing[0] и endBlockFacing[0] будут работать корректно до тех пор, пока не появятся источники и приемники энергии, у которых несколько граней на передачу и прием!!!!
 
 
 
         //смотрим с какой грани заканчивать
         var endConnection = parts[end].Connection;
-        var endBlockFacing = new List<int>();
         foreach (var face in FacingHelper.Faces(endConnection))
         {
             endBlockFacing.Add(face.Index);
         }
 
         //очередь обработки
-        var queue = new Queue<(BlockPos, int)>();
+
         queue.Enqueue((start, startBlockFacing[0]));
 
         //хранит цепочку пути и грань
-        var cameFrom = new Dictionary<(BlockPos, int), (BlockPos, int)>();
+
         cameFrom[(start, startBlockFacing[0])] = (null!, 0);
 
         //хранит цепочку пути (для вывода наружу)
-        var cameFromList = new List<BlockPos>();
         cameFromList.Add(start);
 
         //хранит номер задействованной грани соседа 
-        var facingFrom = new Dictionary<(BlockPos, int), int>();
+
         facingFrom[(start, startBlockFacing[0])] = startBlockFacing[0];
 
 
         //хранит для каждого кусочка цепи посещенные грани в данный момент
-        var nowProcessedFaces = new Dictionary<(BlockPos, int), bool[]>();
+
         nowProcessedFaces[(start, startBlockFacing[0])] = new bool[6] { false, false, false, false, false, false };
         nowProcessedFaces[(start, startBlockFacing[0])][startBlockFacing[0]] = true;
 
@@ -72,20 +145,12 @@ public class PathFinder
 
 
         //хранит для каждого кусочка цепи все посещенные грани
-        var processedFaces = new Dictionary<BlockPos, bool[]>();
         foreach (var index in networkPositions)
         {
             processedFaces[index] = new bool[6] { false, false, false, false, false, false };
         }
 
-        bool first = true;                      //маркер для первого прохода
 
-        List<BlockPos> buf1;     //список соседей
-        List<int> buf2;          //список граней соседей
-        bool[] buf3;            //список граней, которые сейчас в работе
-        bool[] buf4;            //список граней, которые уже просчитаны
-        BlockPos currentPos;    //текущая позиция
-        int currentFace;        //текущая грань
 
         while (queue.Count > 0)                 //пока очередь не опустеет
         {
@@ -96,7 +161,7 @@ public class PathFinder
 
 
             // Затем используйте распаковку:
-            (buf1, buf2, buf3, buf4) = GetNeighbors(currentPos, network, parts, first, processedFaces[currentPos], facingFrom[(currentPos, currentFace)]);
+            (buf1, buf2, buf3, buf4) = GetNeighbors(currentPos, processedFaces[currentPos], facingFrom[(currentPos, currentFace)]);
 
 
 
@@ -105,23 +170,27 @@ public class PathFinder
             int i = 0;
             foreach (var neighbor in buf1)
             {
-                if (!processedFaces[neighbor][buf2[i]] && !cameFrom.ContainsKey((neighbor, buf2[i])))  //если соседская грань уже учавствовала в расчете, то пропускаем этого соседа
+                var state = (neighbor, buf2[i]);
+                if (!processedFaces[neighbor][buf2[i]] && !cameFrom.ContainsKey(state))  //если соседская грань уже учавствовала в расчете, то пропускаем этого соседа
                 {
-                    queue.Enqueue((neighbor, buf2[i]));
+                    queue.Enqueue(state);
 
-                    cameFrom[(neighbor, buf2[i])] = (currentPos, facingFrom[(currentPos, currentFace)]);
+                    cameFrom[state] = (currentPos, facingFrom[(currentPos, currentFace)]);
                     cameFromList.Add(neighbor);
 
-                    facingFrom[(neighbor, buf2[i])] = buf2[i];
+                    facingFrom[state] = buf2[i];
 
-                    nowProcessedFaces[(neighbor, buf2[i])] = buf3;
+                    nowProcessedFaces[state] = buf3;
                 }
 
                 i++;
             }
 
+            if (cameFrom.Count>1000)
+            { // Ограничение на количество посещенных состояний
+                return (null!, null!, null!, null!);
+            }
 
-            first = false; //сбросили маркер
         }
 
         if (!cameFromList.Contains(end))        //не нашли конец?
@@ -129,71 +198,41 @@ public class PathFinder
 
         var (path, faces) = ReconstructPath(start, end, endBlockFacing[0], cameFrom);    //реконструкция маршрута
 
-        Facing[] nowProcessingFaces = null!;      //храним тут Facing граней, которые сейчас в работе                                           
-        bool[][] nowProcessedFacesList = null!; //хранит для каждого кусочка цепи посещенные грани в данный момент (для вывода наружу)                                                
-        int[] facingFromList = null!;            //хранит номер задействованной грани соседа (для вывода наружу)
+        
+        // Если путь не найден, возвращаем null
+        if (path == null)
+            return (null!, null!, null!, null!);
 
+        int pathLength = path.Length;
+        var nowProcessingFaces = new Facing[pathLength];
+        var nowProcessedFacesList = new bool[pathLength][];
+        var facingFromList = new int[pathLength];
 
-        // ниже можно код сделать компактнее, но потом
-        if (path != null)
+        // Заполняем массивы с информацией о гранях и состоянии
+        for (int i = 0; i < pathLength; i++)
         {
-            bool[] npf;
-            Facing facing;
-            int pathLength = path.Count(); //длина пути
-            nowProcessingFaces = new Facing[pathLength];
-            nowProcessedFacesList = new bool[pathLength][];
-            facingFromList = new int[pathLength];
+            var state = (path[i], faces[i]);
+            facingFromList[i] = facingFrom[state];
+            nowProcessedFacesList[i] = nowProcessedFaces.ContainsKey(state)
+                ? nowProcessedFaces[state]
+                : new bool[6];
 
-            facingFromList[0] = facingFrom[(path[0], faces[0])];
-
-            for (int i = 1; i < pathLength; i++)                                //подготавливаем дополнительные данные
-            {
-                facingFromList[i] = facingFrom[(path[i], faces[i])];
-                // первый элемент не добавляем
-
-                npf = nowProcessedFaces[(path[i], faces[i])];
-
-                nowProcessedFacesList[i-1]=npf;
-
-                //фильтруем только нужные грани
-                facing = parts[path[i-1]].Connection &
-                    ((npf[0] ? Facing.NorthAll : Facing.None)
-                    | (npf[1] ? Facing.EastAll : Facing.None)
-                    | (npf[2] ? Facing.SouthAll : Facing.None)
-                    | (npf[3] ? Facing.WestAll : Facing.None)
-                    | (npf[4] ? Facing.UpAll : Facing.None)
-                    | (npf[5] ? Facing.DownAll : Facing.None));
-
-                nowProcessingFaces[i - 1] = facing;
-
-
-            }
-
-            // последний элемент
-
-            npf = new bool[6] { false, false, false, false, false, false };
-            npf[endBlockFacing[0]] = true; //маркер, что мы закончили этой гранью
-
-            nowProcessedFacesList[pathLength -1] = npf;
-
-            //фильтруем только нужные грани
-            facing = parts[path[pathLength - 1]].Connection &
-                ((npf[0] ? Facing.NorthAll : Facing.None)
-                | (npf[1] ? Facing.EastAll : Facing.None)
-                | (npf[2] ? Facing.SouthAll : Facing.None)
-                | (npf[3] ? Facing.WestAll : Facing.None)
-                | (npf[4] ? Facing.UpAll : Facing.None)
-                | (npf[5] ? Facing.DownAll : Facing.None));
-
-            nowProcessingFaces[pathLength - 1] = facing;
-
-
-
+            var partConn = parts[path[i]].Connection;
+            Facing result = Facing.None;
+            var npf = nowProcessedFacesList[i];
+            if (npf[0]) result |= partConn & Facing.NorthAll;
+            if (npf[1]) result |= partConn & Facing.EastAll;
+            if (npf[2]) result |= partConn & Facing.SouthAll;
+            if (npf[3]) result |= partConn & Facing.WestAll;
+            if (npf[4]) result |= partConn & Facing.UpAll;
+            if (npf[5]) result |= partConn & Facing.DownAll;
+            nowProcessingFaces[i] = result;
         }
-
 
         return (path, facingFromList, nowProcessedFacesList, nowProcessingFaces);
     }
+
+
 
 
 
@@ -201,38 +240,26 @@ public class PathFinder
     /// Вычисляет позиции соседей от текущего значения
     /// </summary>
     /// <param name="pos"></param>
-    /// <param name="network"></param>
     /// <returns></returns>
-    private (List<BlockPos>, List<int>, bool[], bool[]) GetNeighbors(BlockPos pos, Network network, Dictionary<BlockPos, NetworkPart> parts, bool first, bool[] processFaces, int startFace)
+    private (List<BlockPos>, List<int>, bool[], bool[]) GetNeighbors(BlockPos pos, bool[] processFaces, int startFace)
     {
-        var networkPositions = network.PartPositions; // позиции в этой сети
-
-        List<BlockPos> Neighbors = new List<BlockPos>();      // координата соседа
-        List<int> NeighborsFace = new List<int>();            // грань соседа с которым мы взаимодействовать будем
-        bool[] NowProcessed = new bool[6];                    // задействованные грани в этой точке
+        // очищаем предыдущие данные
+        Neighbors.Clear();                                // координата соседа
+        NeighborsFace.Clear();                            // грань соседа с которым мы взаимодействовать будем
+        NowProcessed.Fill(false);                    // задействованные грани в этой точке
+        queue2.Clear();
+        processFacesBuf.Fill(false);
 
         var part = parts[pos];                                // текущий элемент
         var Connections = part.Connection;                    // соединения этого элемента
 
-        bool[] faces = new bool[6]; // фильтрация по текущей сети и не сгоревшим граням
-
-        for (int i = 0; i < 6; i++)
-        {
-            if (part.Networks[i] == network && !part.eparams[i].burnout)
-            {
-                faces[i] = true;
-            }
-        }
 
         Facing hereConnections = Facing.None;
-        Facing[] faceMasks = new Facing[]
-        {
-        Facing.NorthAll, Facing.EastAll, Facing.SouthAll, Facing.WestAll, Facing.UpAll, Facing.DownAll
-        };
 
+        // выясняем какие грани соединены с сетью, не сгорели, или не обработаны еще
         for (int i = 0; i < 6; i++)
         {
-            if (faces[i] && !processFaces[i])
+            if (part.Networks[i] == network && !part.eparams[i].burnout && !processFaces[i])
             {
                 hereConnections |= Connections & faceMasks[i];
             }
@@ -240,29 +267,28 @@ public class PathFinder
 
         // выясняем с какой гранью мы работаем и соединены ли грани одной цепи
         int startFaceIndex = startFace;
-        var queue = new Queue<int>();
-        queue.Enqueue(startFaceIndex);
+        queue2.Enqueue(startFaceIndex);
 
-        bool[] processFacesBuf = new bool[6];
+
         processFaces.CopyTo(processFacesBuf, 0);
         processFacesBuf[startFaceIndex] = true;
 
         // Поиск всех связанных граней
-        while (queue.Count > 0)
+        while (queue2.Count > 0)
         {
-            int currentFaceIndex = queue.Dequeue();
+            int currentFaceIndex = queue2.Dequeue();
             BlockFacing currentFace = FacingHelper.BlockFacingFromIndex(currentFaceIndex);
             Facing currentFaceMask = FacingHelper.FromFace(currentFace);
             Facing connections = hereConnections & currentFaceMask;
 
-            foreach (BlockFacing direction in FacingHelper.Directions(connections))
+            foreach (var direction in FacingHelper.Directions(connections))
             {
                 int targetFaceIndex = direction.Index;
 
                 if (!processFacesBuf[targetFaceIndex] && (hereConnections & FacingHelper.From(direction, currentFace)) != 0)
                 {
                     processFacesBuf[targetFaceIndex] = true;
-                    queue.Enqueue(targetFaceIndex);
+                    queue2.Enqueue(targetFaceIndex);
                 }
             }
         }
@@ -283,7 +309,7 @@ public class PathFinder
         {
             // ищем соседей по граням
             var directionFilter = FacingHelper.FromDirection(direction);
-            var neighborPosition = part.Position.AddCopy(direction);
+            neighborPosition = part.Position.AddCopy(direction);
 
             if (parts.TryGetValue(neighborPosition, out var neighborPart))
             {
@@ -378,73 +404,8 @@ public class PathFinder
 
 
 
-    /*
-    /// <summary>
-    /// Вычисляет позиции соседей от текущего значения
-    /// </summary>
-    /// <param name="pos"></param>
-    /// <param name="network"></param>
-    /// <returns></returns>
-    public bool ToGetNeighbor(BlockPos pos, Dictionary<BlockPos, NetworkPart> parts, int startFace, BlockPos nextPos)
-    {
-        if (!parts.TryGetValue(pos, out var part))
-            return false;
 
-        var processedFaces = new bool[6];
-        var queue = new Queue<BlockFacing>();
-        var startFacing = FacingHelper.BlockFacingFromIndex(startFace);
 
-        queue.Enqueue(startFacing);
-        processedFaces[startFace] = true;
-
-        // Проверка прямых соседей по граням
-        foreach (var direction in FacingHelper.Directions(part.Connection))
-        {
-            var neighborPos = pos.AddCopy(direction);
-            if (neighborPos == nextPos)
-                return true;
-        }
-
-        // Проверка соседей по ребрам
-        foreach (var direction in FacingHelper.Directions(part.Connection))
-        {
-            foreach (var face in FacingHelper.Faces(part.Connection))
-            {
-                if (face == direction || face == direction.Opposite)
-                    continue;
-
-                var neighborPos = pos.AddCopy(direction).AddCopy(face);
-                if (neighborPos == nextPos && parts.ContainsKey(neighborPos))
-                    return true;
-            }
-        }
-
-        // BFS для поиска соединенных граней
-        while (queue.Count > 0)
-        {
-            var currentFacing = queue.Dequeue();
-
-            // Проверка всех направлений соединений
-            foreach (var direction in FacingHelper.Directions(part.Connection))
-            {
-                if (!processedFaces[direction.Index] &&
-                    (part.Connection & FacingHelper.FromFace(direction)) != 0)
-                {
-                    processedFaces[direction.Index] = true;
-                    queue.Enqueue(direction);
-
-                    // Прямая проверка позиции
-                    var testPos = pos.AddCopy(direction);
-                    if (testPos == nextPos)
-                        return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    */
 
     /// <summary>
     /// Реконструирует маршрут

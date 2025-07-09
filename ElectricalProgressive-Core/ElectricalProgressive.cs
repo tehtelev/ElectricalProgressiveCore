@@ -14,6 +14,7 @@ using Vintagestory.API.Util;
 using Cairo;
 using System.Threading.Tasks;
 using Vintagestory.API.Datastructures;
+using System.IO;
 
 [assembly: ModDependency("game", "1.20.0")]
 [assembly: ModInfo(
@@ -21,7 +22,7 @@ using Vintagestory.API.Datastructures;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Electrical logic library.",
-    Version = "1.1.0",
+    Version = "1.2.0",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
 
@@ -36,7 +37,7 @@ namespace ElectricalProgressive
 
         private Dictionary<BlockPos, List<EnergyPacket>> packetsByPosition = new(); //Словарь для хранения пакетов по позициям
 
-        
+
         private readonly List<EnergyPacket> globalEnergyPackets = new(); // Глобальный список пакетов энергии
 
 
@@ -45,7 +46,7 @@ namespace ElectricalProgressive
         private Dictionary<BlockPos, float> sumEnergy = new();
 
 
-        private PathFinder pathFinder = new(); // Модуль поиска путей
+
         public ICoreAPI api = null!;
         private ICoreClientAPI capi = null!;
         private ICoreServerAPI sapi = null!;
@@ -68,7 +69,7 @@ namespace ElectricalProgressive
         int envUpdater = 0;
 
         private long listenerId;
-        private NetworkInformation result=new();
+        private NetworkInformation result = new();
 
         /// <summary>
         /// Запуск модификации
@@ -119,7 +120,7 @@ namespace ElectricalProgressive
             damageManager = null;
             WeatherSystemServer = null;
 
-            pathFinder = null!;
+
 
             networks.Clear();
             parts.Clear();
@@ -138,7 +139,7 @@ namespace ElectricalProgressive
             speedOfElectricity = Math.Clamp(config.speedOfElectricity, 1, 16);
             instant = config.instant;
             timeBeforeBurnout = Math.Clamp(config.timeBeforeBurnout, 1, 600);
-            multiThreading=config.multiThreading;
+            multiThreading = config.multiThreading;
 
             //устанавливаем частоту просчета сети
             if (instant)
@@ -301,6 +302,7 @@ namespace ElectricalProgressive
 
             int[][] distances = new int[cP][];
 
+            var pathFinder = new PathFinder(network, parts); // Модуль поиска путей
 
             for (int i = 0; i < cP; i++)
             {
@@ -315,32 +317,37 @@ namespace ElectricalProgressive
                             out var cachedPath,
                             out _,
                             out _,
-                            out _)
-                        && cachedPath != null)
+                            out _))
                     {
-
-                        distances[i][j] = cachedPath.Length;
-
-                    }
-                    else
-                    {
-                        var (path, facing, processed, usedConn) = pathFinder.FindShortestPath(start, end, network, parts);
-                        if (path != null)
+                        if (cachedPath != null)
                         {
-                            distances[i][j] = path.Length;
-
-                            PathCacheManager.AddOrUpdate(start, end, network.version, path, facing, processed, usedConn);
+                            distances[i][j] = cachedPath.Length;
                         }
                         else
                         {
                             distances[i][j] = int.MaxValue;
                         }
                     }
+                    else
+                    {
+                        
+                        var (path, facing, processed, usedConn) = pathFinder.FindShortestPath(start, end);
+                        if (path != null)
+                        {
+                            distances[i][j] = path.Length;
+                        }
+                        else
+                        {
+                            distances[i][j] = int.MaxValue;
+                        }
+                        PathCacheManager.AddOrUpdate(start, end, network.version, path, facing, processed, usedConn);
+
+                    }
                 }
             }
             Store[] stores = new Store[pP];
-            Customer[] customers = new Customer[cP]; 
-            int[] distFromCustomerToStore= new int[pP];
+            Customer[] customers = new Customer[cP];
+            int[] distFromCustomerToStore = new int[pP];
 
             for (int j = 0; j < pP; j++)
             {
@@ -353,7 +360,7 @@ namespace ElectricalProgressive
                 distFromCustomerToStore.Fill(0);
                 for (int j = 0; j < pP; j++)
                 {
-                    distFromCustomerToStore[j]= distances[i][j];
+                    distFromCustomerToStore[j] = distances[i][j];
                 }
 
                 customers[i] = new Customer(i, consumerRequests[i], distFromCustomerToStore);
@@ -387,8 +394,7 @@ namespace ElectricalProgressive
             Cleaner();
 
 
-
-
+            //foreach(var network in networks)
             ParallelHelper.ForEachPartitioned(networks, network =>
             {
                 // Этап 1: Очистка ----------------------------------------------------------------------------
@@ -478,7 +484,7 @@ namespace ElectricalProgressive
                         for (int k = 0; k < storeCount; k++)
                         {
                             var value = sim.Customers[i].Received[sim.Stores[k].Id];
-                            if (value>0)
+                            if (value > 0)
                             {
                                 posStore = producerPositions[k];
                                 posCustomer = consumerPositions[i];
@@ -531,7 +537,7 @@ namespace ElectricalProgressive
 
 
 
-                // Этап 5: Забираем у аккумуляторов выданное    ----------------------------------------------------------------------------
+                // Этап 5: Забираем у аккумуляторов выданное----------------------------------------------------------------------------
                 consIter = 0; // Итератор
                 foreach (var accum in localAccums)
                 {
@@ -662,8 +668,8 @@ namespace ElectricalProgressive
                 {
                     foreach (var store in sim.Stores)
                     {
-                        var value= customer.Received[store.Id];
-                        if (value>0)
+                        var value = customer.Received[store.Id];
+                        if (value > 0)
                         {
                             consumption += value;
                         }
@@ -716,7 +722,7 @@ namespace ElectricalProgressive
                 }
 
             });
-
+            //}
 
 
 
@@ -728,7 +734,7 @@ namespace ElectricalProgressive
                 {
                     foreach (var electricTransformator in network.Transformators)
                     {
-                        if (parts.TryGetValue(electricTransformator.Pos, out var part) && part.IsLoaded) 
+                        if (parts.TryGetValue(electricTransformator.Pos, out var part) && part.IsLoaded)
                             electricTransformator.Update();
                     }
 
@@ -779,8 +785,7 @@ namespace ElectricalProgressive
                 sumEnergy.Clear();
                 foreach (var part2 in parts)  //перебираем все элементы
                 {
-                    sumEnergy.Add(part2.Key, 0F);         //заполняем нулями               
-
+                    sumEnergy.Add(part2.Key, 0F);                //заполняем нулями
                     part2.Value.current.Fill(0f);           //обнуляем токи
                 }
 
@@ -1171,7 +1176,7 @@ namespace ElectricalProgressive
         {
             var partPositions = new BlockPos[network.PartPositions.Count];
             network.PartPositions.CopyTo(partPositions);
-            network.version++;                                              // Увеличиваем версию сети перед удалением
+            network.version++;
             this.networks.Remove(network);                                  //удаляем цепь из списка цепей
 
             foreach (var position in partPositions)                         //перебираем по всем бывшим элементам этой цепи
@@ -1362,12 +1367,9 @@ namespace ElectricalProgressive
                 {
                     network.Transformators.Add(transformator);
                 }
-
-
-
+                
                 network.PartPositions.Add(part.Position);
-
-                network.version++; // Увеличиваем версию сети после добавления соединения
+                network.version++; // Увеличиваем версию сети 
 
                 part.Networks[face.Index] = network;            //присваиваем в этой точке эту цепь
 
@@ -1584,7 +1586,7 @@ namespace ElectricalProgressive
         /// <param name="method">Метод вывода с какой грани "thisFace"- эту грань, "firstFace"- информация о первой грани из многих, "currentFace" - информация о грани, в которой ток больше 0</param>
         /// <returns></returns>
         public NetworkInformation GetNetworks(BlockPos position, Facing facing, string method = "thisFace")
-        { 
+        {
             result.Reset(); // сбрасываем значения
 
             if (this.parts.TryGetValue(position, out var part))
