@@ -51,6 +51,8 @@ public class PathFinder
     private Queue<int> queue2 = new();
     private bool[] processFacesBuf = new bool[6];
     private BlockPos neighborPosition;
+    private List<BlockFacing> bufForDirections= new List<BlockFacing>(6);
+    private List<BlockFacing> bufForFaces= new List<BlockFacing>(6);
 
     // Переменные используемые в FindShortestPath, чтобы избежать очень частых аллокаций
     private List<int> startBlockFacing = new();
@@ -73,7 +75,12 @@ public class PathFinder
 
 
 
-
+    /// <summary>
+    /// Ищет кратчайший путь от начальной позиции к конечной в сети
+    /// </summary>
+    /// <param name="start"></param>
+    /// <param name="end"></param>
+    /// <returns></returns>
     public (BlockPos[], int[], bool[][], Facing[]) FindShortestPath(BlockPos start, BlockPos end)
     {
         // очищаем предыдущие данные
@@ -144,10 +151,24 @@ public class PathFinder
 
 
 
-        //хранит для каждого кусочка цепи все посещенные грани
+        // хранит для каждого кусочка цепи все посещенные грани
+        // словарь не перезаполняется, а лишь очищается при каждом новом запуске поиска пути для той же сети, чтобы не создавать новые объекты
         foreach (var index in networkPositions)
         {
-            processedFaces[index] = new bool[6] { false, false, false, false, false, false };
+            if (!processedFaces.TryGetValue(index, out _))
+            {
+                processedFaces.Add(index, new bool[6] { false, false, false, false, false, false });
+            }
+            else
+            {
+                processedFaces[index][0] = false;
+                processedFaces[index][1] = false;
+                processedFaces[index][2] = false;
+                processedFaces[index][3] = false;
+                processedFaces[index][4] = false;
+                processedFaces[index][5] = false;
+            }
+
         }
 
 
@@ -250,6 +271,7 @@ public class PathFinder
         queue2.Clear();
         processFacesBuf.Fill(false);
 
+
         var part = parts[pos];                                // текущий элемент
         var Connections = part.Connection;                    // соединения этого элемента
 
@@ -281,7 +303,8 @@ public class PathFinder
             Facing currentFaceMask = FacingHelper.FromFace(currentFace);
             Facing connections = hereConnections & currentFaceMask;
 
-            foreach (var direction in FacingHelper.Directions(connections))
+            FacingHelper.FillDirections(connections, bufForDirections);
+            foreach (var direction in bufForDirections)
             {
                 int targetFaceIndex = direction.Index;
 
@@ -304,8 +327,10 @@ public class PathFinder
         }
         hereConnections &= validConnectionsMask;
 
-        // ищем соседей
-        foreach (var direction in FacingHelper.Directions(hereConnections))
+
+        // ищем соседей везде
+        FacingHelper.FillDirections(hereConnections, bufForDirections);
+        foreach (var direction in bufForDirections)
         {
             // ищем соседей по граням
             var directionFilter = FacingHelper.FromDirection(direction);
@@ -313,7 +338,8 @@ public class PathFinder
 
             if (parts.TryGetValue(neighborPosition, out var neighborPart))
             {
-                foreach (var face in FacingHelper.Faces(hereConnections & directionFilter))
+                FacingHelper.FillFaces(hereConnections & directionFilter, bufForFaces);
+                foreach (var face in bufForFaces)
                 {
                     var opposite = direction.Opposite;
 
@@ -338,7 +364,8 @@ public class PathFinder
             // ищем соседей по ребрам
             directionFilter = FacingHelper.FromDirection(direction);
 
-            foreach (var face in FacingHelper.Faces(hereConnections & directionFilter))
+            FacingHelper.FillFaces(hereConnections & directionFilter, bufForFaces);
+            foreach (var face in bufForFaces)
             {
                 neighborPosition = part.Position.AddCopy(direction).AddCopy(face);
 
@@ -369,7 +396,8 @@ public class PathFinder
             // ищем соседей по перпендикулярной грани
             directionFilter = FacingHelper.FromDirection(direction);
 
-            foreach (var face in FacingHelper.Faces(hereConnections & directionFilter))
+            FacingHelper.FillFaces(hereConnections & directionFilter, bufForFaces);
+            foreach (var face in bufForFaces)
             {
                 neighborPosition = part.Position.AddCopy(face);
 

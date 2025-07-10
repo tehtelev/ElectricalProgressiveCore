@@ -55,7 +55,7 @@ namespace ElectricalProgressive
         public static WeatherSystemServer? WeatherSystemServer;
 
 
-
+        private Network localNetwork = new Network();
 
 
         public static int speedOfElectricity; // Скорость электричества в проводах (блоков в тик)
@@ -330,7 +330,7 @@ namespace ElectricalProgressive
                     }
                     else
                     {
-                        
+
                         var (path, facing, processed, usedConn) = pathFinder.FindShortestPath(start, end);
                         if (path != null)
                         {
@@ -426,7 +426,7 @@ namespace ElectricalProgressive
 
                 foreach (var electricConsumer in network.Consumers)
                 {
-                    if (parts.TryGetValue(electricConsumer.Pos, out var part) && part.IsLoaded)
+                    if (network.PartPositions.Contains(electricConsumer.Pos) && parts[electricConsumer.Pos].IsLoaded)
                     {
                         localConsumers.Add(new Consumer(electricConsumer));
                         requestedEnergy = electricConsumer.Consume_request();
@@ -445,7 +445,7 @@ namespace ElectricalProgressive
 
                 foreach (var electricProducer in network.Producers)
                 {
-                    if (parts.TryGetValue(electricProducer.Pos, out var part) && part.IsLoaded)
+                    if (network.PartPositions.Contains(electricProducer.Pos) && parts[electricProducer.Pos].IsLoaded)
                     {
                         localProducers.Add(new Producer(electricProducer));
                         giveEnergy = electricProducer.Produce_give();
@@ -457,7 +457,7 @@ namespace ElectricalProgressive
 
                 foreach (var electricAccum in network.Accumulators)
                 {
-                    if (parts.TryGetValue(electricAccum.Pos, out var part) && part.IsLoaded)
+                    if (network.PartPositions.Contains(electricAccum.Pos) && parts[electricAccum.Pos].IsLoaded)
                     {
                         localAccums.Add(new Accumulator(electricAccum));
                         giveEnergy = electricAccum.canRelease();
@@ -782,10 +782,19 @@ namespace ElectricalProgressive
                 NetworkPart nextPart, currentPart;      // Временные переменные для частей сети
                 EnergyPacket packet;                    // Временная переменная для пакета энергии
 
-                sumEnergy.Clear();
+                //sumEnergy.Clear();
                 foreach (var part2 in parts)  //перебираем все элементы
                 {
-                    sumEnergy.Add(part2.Key, 0F);                //заполняем нулями
+                    //заполняем нулями
+                    if (!sumEnergy.TryGetValue(part2.Key, out _))
+                    {
+                        sumEnergy.Add(part2.Key, 0F);
+                    }
+                    else
+                    {
+                        sumEnergy[part2.Key] = 0F;
+                    }
+
                     part2.Value.current.Fill(0f);           //обнуляем токи
                 }
 
@@ -870,7 +879,7 @@ namespace ElectricalProgressive
                                     packet.currentIndex--;
 
                                     // далее учитываем правило алгебраического сложения встречных токов
-                                    // 1) Определяем вектор движени
+                                    // 1) Определяем вектор движения
                                     var delta = nextPos.SubCopy(currentPos);
                                     bool sign = true;
 
@@ -926,14 +935,20 @@ namespace ElectricalProgressive
                 }
 
 
-                NetworkPart parta;
+
                 foreach (var pair in sumEnergy)
                 {
-                    parta = parts[pair.Key]; // Гарантированно существует
-                    if (parta.Consumer != null)
-                        parta.Consumer!.Consume_receive(pair.Value);
-                    else if (parta.Accumulator != null)
-                        parta.Accumulator!.Store(pair.Value);
+                    if (parts.TryGetValue(pair.Key, out var parta))
+                    {
+                        if (parta.Consumer != null)
+                            parta.Consumer!.Consume_receive(pair.Value);
+                        else if (parta.Accumulator != null)
+                            parta.Accumulator!.Store(pair.Value);
+                    }
+                    else
+                    {
+                        sumEnergy.Remove(pair.Key); // Удаляем, если части сети этой уже нет
+                    }
                 }
 
 
@@ -941,7 +956,13 @@ namespace ElectricalProgressive
 
                 // Этап 13: Проверка сгорания проводов и трансформаторов ----------------------------------------------------------------------------
 
-                packetsByPosition.Clear();
+
+
+                // подчищаем словарь, но не в ноль
+                foreach (var list in packetsByPosition.Values)
+                {
+                    list.Clear();
+                }
 
                 // Создаем словарь для хранения пакетов по позициям
                 foreach (var packet2 in globalEnergyPackets)
@@ -1053,6 +1074,10 @@ namespace ElectricalProgressive
                             }
                         }
 
+                    }
+                    else
+                    {
+                        //packetsByPosition.Remove(partPos); // Удаляем, если части сети этой уже нет
                     }
 
                     // Проверка на превышение тока
@@ -1367,7 +1392,7 @@ namespace ElectricalProgressive
                 {
                     network.Transformators.Add(transformator);
                 }
-                
+
                 network.PartPositions.Add(part.Position);
                 network.version++; // Увеличиваем версию сети 
 
@@ -1591,7 +1616,7 @@ namespace ElectricalProgressive
 
             if (this.parts.TryGetValue(position, out var part))
             {
-                Network network = null!;
+
 
                 if (method == "thisFace" || method == "firstFace") // пока так, возможно потом по-разному будет обработка
                 {
@@ -1599,7 +1624,7 @@ namespace ElectricalProgressive
 
                     if (part.Networks[blockFacing.Index] is { } net)
                     {
-                        network = net;                                              //выдаем найденную цепь
+                        localNetwork = net;                                              //выдаем найденную цепь
                         result.Facing |= FacingHelper.FromFace(blockFacing);        //выдаем ее направления
                         result.eParamsInNetwork = part.eparams[blockFacing.Index];  //выдаем ее текущие параметры
                         result.current = part.current[blockFacing.Index];           //выдаем текущий ток в этой грани
@@ -1623,7 +1648,7 @@ namespace ElectricalProgressive
 
                     if (part.Networks[searchIndex] is { } net)
                     {
-                        network = net;                                              //выдаем найденную цепь
+                        localNetwork = net;                                              //выдаем найденную цепь
                         result.Facing |= FacingHelper.FromFace(blockFacing);        //выдаем ее направления
                         result.eParamsInNetwork = part.eparams[searchIndex];  //выдаем ее текущие параметры
                         result.current = part.current[searchIndex];           //выдаем текущий ток в этой грани
@@ -1636,16 +1661,16 @@ namespace ElectricalProgressive
 
 
                 // Если нашли сеть, то заполняем информацию о ней
-                result.NumberOfBlocks = network.PartPositions.Count;
-                result.NumberOfConsumers = network.Consumers.Count;
-                result.NumberOfProducers = network.Producers.Count;
-                result.NumberOfAccumulators = network.Accumulators.Count;
-                result.NumberOfTransformators = network.Transformators.Count;
-                result.Production = network.Production;
-                result.Consumption = network.Consumption;
-                result.Capacity = network.Capacity;
-                result.MaxCapacity = network.MaxCapacity;
-                result.Request = network.Request;
+                result.NumberOfBlocks = localNetwork.PartPositions.Count;
+                result.NumberOfConsumers = localNetwork.Consumers.Count;
+                result.NumberOfProducers = localNetwork.Producers.Count;
+                result.NumberOfAccumulators = localNetwork.Accumulators.Count;
+                result.NumberOfTransformators = localNetwork.Transformators.Count;
+                result.Production = localNetwork.Production;
+                result.Consumption = localNetwork.Consumption;
+                result.Capacity = localNetwork.Capacity;
+                result.MaxCapacity = localNetwork.MaxCapacity;
+                result.Request = localNetwork.Request;
 
             }
 

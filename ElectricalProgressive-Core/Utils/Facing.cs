@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Cairo.Freetype;
 using ProtoBuf;
 using Vintagestory.API.MathTools;
@@ -68,40 +69,46 @@ public static class FacingHelper
         BlockFacing.DOWN
     };
 
+    private static readonly Facing[] facesAll = {
+        Facing.NorthAll,
+        Facing.EastAll,
+        Facing.SouthAll,
+        Facing.WestAll,
+        Facing.UpAll,
+        Facing.DownAll
+    };
+
+    private static readonly Facing[] directionsAll = {
+        Facing.AllNorth,
+        Facing.AllEast,
+        Facing.AllSouth,
+        Facing.AllWest,
+        Facing.AllUp,
+        Facing.AllDown
+    };
 
 
 
+    /// <summary>
+    /// Выдает Facing по BlockFacing, но для граней (Faces)
+    /// </summary>
+    /// <param name="face"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Facing FromFace(BlockFacing face)
     {
-        if (face == null)
-            return Facing.None;
-        return face.Index switch
-        {
-            BlockFacing.indexNORTH => Facing.NorthAll,
-            BlockFacing.indexEAST => Facing.EastAll,
-            BlockFacing.indexSOUTH => Facing.SouthAll,
-            BlockFacing.indexWEST => Facing.WestAll,
-            BlockFacing.indexUP => Facing.UpAll,
-            BlockFacing.indexDOWN => Facing.DownAll,
-            _ => Facing.None
-        };
+        return (face?.Index >= 0 && face?.Index < 6) ? facesAll[face.Index] : Facing.None;
     }
 
+    /// <summary>
+    /// Выдает Facing по BlockFacing, но для направлений (Directions)
+    /// </summary>
+    /// <param name="direction"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Facing FromDirection(BlockFacing direction)
     {
-        if (direction == null)
-            return Facing.None;
-
-        return direction.Index switch
-        {
-            BlockFacing.indexNORTH => Facing.AllNorth,
-            BlockFacing.indexEAST => Facing.AllEast,
-            BlockFacing.indexSOUTH => Facing.AllSouth,
-            BlockFacing.indexWEST => Facing.AllWest,
-            BlockFacing.indexUP => Facing.AllUp,
-            BlockFacing.indexDOWN => Facing.AllDown,
-            _ => Facing.None
-        };
+        return (direction?.Index >= 0 && direction?.Index < 6) ? directionsAll[direction.Index] : Facing.None;
     }
 
 
@@ -110,14 +117,20 @@ public static class FacingHelper
     /// </summary>
     /// <param name="flag"></param>
     /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static BlockFacing BlockFacingFromIndex(int flag)
     {
         return (flag >= 0 && flag < blockfaces.Length) ? blockfaces[flag] : null!;
     }
 
 
-
-
+    /// <summary>
+    /// Выдает Facing по BlockFacing, но для граней (Faces) и направлений (Directions).
+    /// </summary>
+    /// <param name="face"></param>
+    /// <param name="direction"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Facing From(BlockFacing face, BlockFacing direction)
     {
         return FromFace(face) & FromDirection(direction);
@@ -173,7 +186,39 @@ public static class FacingHelper
             yield return BlockFacing.DOWN;
     }
 
-    
+
+
+
+    /// <summary>
+    /// Заполняет buffer «гранями» (Faces) заданного флага self.
+    /// buffer при этом не аллоцируется заново, а просто очищается и заполняется.
+    /// </summary>
+    public static void FillFaces(Facing self, List<BlockFacing> buffer)
+    {
+        buffer.Clear();
+        if ((self & Facing.NorthAll) != 0) buffer.Add(BlockFacing.NORTH);
+        if ((self & Facing.EastAll) != 0) buffer.Add(BlockFacing.EAST);
+        if ((self & Facing.SouthAll) != 0) buffer.Add(BlockFacing.SOUTH);
+        if ((self & Facing.WestAll) != 0) buffer.Add(BlockFacing.WEST);
+        if ((self & Facing.UpAll) != 0) buffer.Add(BlockFacing.UP);
+        if ((self & Facing.DownAll) != 0) buffer.Add(BlockFacing.DOWN);
+    }
+
+    /// <summary>
+    /// Заполняет buffer «направлениями» (Directions) заданного флага self.
+    /// buffer при этом не аллоцируется заново, а просто очищается и заполняется.
+    /// </summary>
+    public static void FillDirections(Facing self, List<BlockFacing> buffer)
+    {
+        buffer.Clear();
+        if ((self & Facing.AllNorth) != 0) buffer.Add(BlockFacing.NORTH);
+        if ((self & Facing.AllEast) != 0) buffer.Add(BlockFacing.EAST);
+        if ((self & Facing.AllSouth) != 0) buffer.Add(BlockFacing.SOUTH);
+        if ((self & Facing.AllWest) != 0) buffer.Add(BlockFacing.WEST);
+        if ((self & Facing.AllUp) != 0) buffer.Add(BlockFacing.UP);
+        if ((self & Facing.AllDown) != 0) buffer.Add(BlockFacing.DOWN);
+    }
+
 
 
 
