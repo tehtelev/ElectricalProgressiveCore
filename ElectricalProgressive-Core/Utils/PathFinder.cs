@@ -32,6 +32,13 @@ public class PathFinder
     private Dictionary<BlockPos, NetworkPart> parts;
 
 
+    /// <summary>
+    /// Эвристическая функция (манхэттенское расстояние)
+    /// </summary>
+    private static int Heuristic(BlockPos a, BlockPos b)
+    {
+        return Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y) + Math.Abs(a.Z - b.Z);
+    }
 
 
     /// <summary>
@@ -51,21 +58,21 @@ public class PathFinder
     private Queue<int> queue2 = new();
     private bool[] processFacesBuf = new bool[6];
     private BlockPos neighborPosition;
-    private List<BlockFacing> bufForDirections= new List<BlockFacing>(6);
-    private List<BlockFacing> bufForFaces= new List<BlockFacing>(6);
+    private List<BlockFacing> bufForDirections = new List<BlockFacing>(6);
+    private List<BlockFacing> bufForFaces = new List<BlockFacing>(6);
 
     // Переменные используемые в FindShortestPath, чтобы избежать очень частых аллокаций
     private List<int> startBlockFacing = new();
     private List<int> endBlockFacing = new();
-    private Queue<(BlockPos, int)> queue = new();
+    private PriorityQueue<(BlockPos, int), int> queue = new();
     private Dictionary<(BlockPos, int), (BlockPos, int)> cameFrom = new();
     private List<BlockPos> cameFromList = new();
     private Dictionary<BlockPos, bool[]> processedFaces = new();
     private Dictionary<(BlockPos, int), int> facingFrom = new();
     private Dictionary<(BlockPos, int), bool[]> nowProcessedFaces = new();
     private HashSet<BlockPos> networkPositions = new();
-    private List<BlockPos> buf1=new();     //список соседей
-    private List<int> buf2=new();          //список граней соседей
+    private List<BlockPos> buf1 = new();     //список соседей
+    private List<int> buf2 = new();          //список граней соседей
     private bool[] buf3;            //список граней, которые сейчас в работе
     private bool[] buf4;            //список граней, которые уже просчитаны
     private BlockPos currentPos;    //текущая позиция
@@ -129,7 +136,7 @@ public class PathFinder
 
         //очередь обработки
 
-        queue.Enqueue((start, startBlockFacing[0]));
+        queue.Enqueue((start, startBlockFacing[0]),0);
 
         //хранит цепочку пути и грань
 
@@ -192,9 +199,13 @@ public class PathFinder
             foreach (var neighbor in buf1)
             {
                 var state = (neighbor, buf2[i]);
-                if (!processedFaces[neighbor][buf2[i]] && !cameFrom.ContainsKey(state))  //если соседская грань уже учавствовала в расчете, то пропускаем этого соседа
+                int priority = Heuristic(neighbor, end); // Приоритет = эвристика
+                if (!processedFaces[neighbor][buf2[i]]   // проверяем, что грань соседа еще не обработана
+                    && !cameFrom.ContainsKey(state)      // проверяем, что состояние еще не посещали
+                    && priority<200)                     // ограничение на приоритет, чтобы не зацикливаться на бесконечном поиске
                 {
-                    queue.Enqueue(state);
+                    
+                    queue.Enqueue(state, priority);
 
                     cameFrom[state] = (currentPos, facingFrom[(currentPos, currentFace)]);
                     cameFromList.Add(neighbor);
@@ -207,10 +218,10 @@ public class PathFinder
                 i++;
             }
 
-            if (cameFrom.Count>1000)
-            { // Ограничение на количество посещенных состояний
-                return (null!, null!, null!, null!);
-            }
+            //if (cameFrom.Count > 1000)
+            //{ // Ограничение на количество посещенных состояний
+            //    return (null!, null!, null!, null!);
+            //}
 
         }
 
@@ -219,7 +230,7 @@ public class PathFinder
 
         var (path, faces) = ReconstructPath(start, end, endBlockFacing[0], cameFrom);    //реконструкция маршрута
 
-        
+
         // Если путь не найден, возвращаем null
         if (path == null)
             return (null!, null!, null!, null!);

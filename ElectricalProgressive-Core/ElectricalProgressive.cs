@@ -397,7 +397,7 @@ namespace ElectricalProgressive
             //foreach(var network in networks)
             ParallelHelper.ForEachPartitioned(networks, network =>
             {
-                // Этап 1: Очистка ----------------------------------------------------------------------------
+                // Этап 1: Локальные переменные цикла ----------------------------------------------------------------------------
                 var localConsumers = new List<Consumer>();
                 var localProducers = new List<Producer>();
                 var localAccums = new List<Accumulator>();
@@ -426,7 +426,9 @@ namespace ElectricalProgressive
 
                 foreach (var electricConsumer in network.Consumers)
                 {
-                    if (network.PartPositions.Contains(electricConsumer.Pos) && parts[electricConsumer.Pos].IsLoaded)
+                    if (network.PartPositions.Contains(electricConsumer.Pos) // Проверяем, что потребитель находится в части сети
+                        && parts[electricConsumer.Pos].IsLoaded              // Проверяем, что потребитель загружен
+                        && electricConsumer.Consume_request()>0)             // Проверяем, что потребитель запрашивает энергию вообще
                     {
                         localConsumers.Add(new Consumer(electricConsumer));
                         requestedEnergy = electricConsumer.Consume_request();
@@ -445,7 +447,9 @@ namespace ElectricalProgressive
 
                 foreach (var electricProducer in network.Producers)
                 {
-                    if (network.PartPositions.Contains(electricProducer.Pos) && parts[electricProducer.Pos].IsLoaded)
+                    if (network.PartPositions.Contains(electricProducer.Pos) // Проверяем, что генератор находится в части сети
+                        && parts[electricProducer.Pos].IsLoaded              // Проверяем, что генератор загружен
+                        && electricProducer.Produce_give()>0)                // Проверяем, что генератор отдает энергию вообще
                     {
                         localProducers.Add(new Producer(electricProducer));
                         giveEnergy = electricProducer.Produce_give();
@@ -457,7 +461,9 @@ namespace ElectricalProgressive
 
                 foreach (var electricAccum in network.Accumulators)
                 {
-                    if (network.PartPositions.Contains(electricAccum.Pos) && parts[electricAccum.Pos].IsLoaded)
+                    if (network.PartPositions.Contains(electricAccum.Pos)   // Проверяем, что аккумулятор находится в части сети
+                        && parts[electricAccum.Pos].IsLoaded                // Проверяем, что аккумулятор загружен
+                        && electricAccum.canRelease()>0)                    // Проверяем, что аккумулятор может отдать энергию вообще
                     {
                         localAccums.Add(new Accumulator(electricAccum));
                         giveEnergy = electricAccum.canRelease();
