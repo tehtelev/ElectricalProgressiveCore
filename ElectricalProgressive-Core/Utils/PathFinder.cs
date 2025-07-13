@@ -10,27 +10,6 @@ namespace ElectricalProgressive.Utils;
 
 public class PathFinder
 {
-    /// <summary>
-    /// Конструктор для поиска пути в сети
-    /// </summary>
-    /// <param name="net"></param>
-    /// <param name="partss"></param>
-    public PathFinder(Network net, Dictionary<BlockPos, NetworkPart> partss)
-    {
-        network = net;
-        parts = partss;
-    }
-
-    /// <summary>
-    /// Сеть, в которой мы ищем путь
-    /// </summary>
-    private Network network;
-
-    /// <summary>
-    /// Словарь частей сети
-    /// </summary>
-    private Dictionary<BlockPos, NetworkPart> parts;
-
 
     /// <summary>
     /// Эвристическая функция (манхэттенское расстояние)
@@ -52,8 +31,8 @@ public class PathFinder
 
 
     // Переменные используемые в GetNeighbors, чтобы избежать очень частых аллокаций
-    private List<BlockPos> Neighbors = new();      // координата соседа
-    private List<int> NeighborsFace = new();            // грань соседа с которым мы взаимодействовать будем
+    private List<BlockPos> Neighbors = new(27);      // координата соседа
+    private List<int> NeighborsFace = new(27);            // грань соседа с которым мы взаимодействовать будем
     private bool[] NowProcessed = new bool[6];                    // задействованные грани в этой точке
     private Queue<int> queue2 = new();
     private bool[] processFacesBuf = new bool[6];
@@ -80,7 +59,10 @@ public class PathFinder
 
 
 
-
+    public void Clear()
+    {
+        processedFaces.Clear();
+    }
 
     /// <summary>
     /// Ищет кратчайший путь от начальной позиции к конечной в сети
@@ -88,7 +70,7 @@ public class PathFinder
     /// <param name="start"></param>
     /// <param name="end"></param>
     /// <returns></returns>
-    public (BlockPos[], int[], bool[][], Facing[]) FindShortestPath(BlockPos start, BlockPos end)
+    public (BlockPos[], int[], bool[][], Facing[]) FindShortestPath(BlockPos start, BlockPos end, Network network, Dictionary<BlockPos, NetworkPart> parts)
     {
         // очищаем предыдущие данные
         startBlockFacing.Clear();
@@ -98,7 +80,7 @@ public class PathFinder
         cameFromList.Clear();
         facingFrom.Clear();
         nowProcessedFaces.Clear();
-        processedFaces.Clear();
+        //processedFaces.Clear();
         buf1.Clear();
         buf2.Clear();
         buf3 = Array.Empty<bool>();
@@ -189,7 +171,7 @@ public class PathFinder
 
 
             // Затем используйте распаковку:
-            (buf1, buf2, buf3, buf4) = GetNeighbors(currentPos, processedFaces[currentPos], facingFrom[(currentPos, currentFace)]);
+            (buf1, buf2, buf3, buf4) = GetNeighbors(currentPos, processedFaces[currentPos], facingFrom[(currentPos, currentFace)], network, parts);
 
 
 
@@ -217,6 +199,8 @@ public class PathFinder
 
                 i++;
             }
+
+            
 
             //if (cameFrom.Count > 1000)
             //{ // Ограничение на количество посещенных состояний
@@ -260,10 +244,10 @@ public class PathFinder
             if (npf[5]) result |= partConn & Facing.DownAll;
             nowProcessingFaces[i] = result;
         }
+        
 
         return (path, facingFromList, nowProcessedFacesList, nowProcessingFaces);
     }
-
 
 
 
@@ -273,7 +257,7 @@ public class PathFinder
     /// </summary>
     /// <param name="pos"></param>
     /// <returns></returns>
-    private (List<BlockPos>, List<int>, bool[], bool[]) GetNeighbors(BlockPos pos, bool[] processFaces, int startFace)
+    private (List<BlockPos>, List<int>, bool[], bool[]) GetNeighbors(BlockPos pos, bool[] processFaces, int startFace, Network network, Dictionary<BlockPos, NetworkPart> parts)
     {
         // очищаем предыдущие данные
         Neighbors.Clear();                                // координата соседа
@@ -345,6 +329,7 @@ public class PathFinder
         {
             // ищем соседей по граням
             var directionFilter = FacingHelper.FromDirection(direction);
+            
             neighborPosition = part.Position.AddCopy(direction);
 
             if (parts.TryGetValue(neighborPosition, out var neighborPart))

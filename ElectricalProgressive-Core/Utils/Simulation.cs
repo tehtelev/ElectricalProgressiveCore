@@ -106,8 +106,8 @@ namespace ElectricalProgressive.Utils
         /// </summary>
         public void Reset()
         {
-            Stores.Clear();
-            Customers.Clear();
+            Stores?.Clear();
+            Customers?.Clear();
         }
     }
 }

@@ -25,8 +25,7 @@ namespace ElectricalProgressive.Utils
         private static readonly TimeSpan EntryTtl = TimeSpan.FromMinutes(2);
 
         // Сам кэш, ключом служит только (start, end, version)
-        private static readonly ConcurrentDictionary<(BlockPos, BlockPos, int), Entry> cache
-            = new ConcurrentDictionary<(BlockPos, BlockPos, int), Entry>();
+        private static readonly ConcurrentDictionary<(BlockPos, BlockPos, int), Entry> cache = new();
 
         /// <summary>
         /// Попытаться получить путь из кэша.

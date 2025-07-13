@@ -40,11 +40,33 @@ namespace ElectricalProgressive
 
         private readonly List<EnergyPacket> globalEnergyPackets = new(); // Глобальный список пакетов энергии
 
+        private AsyncPathFinder asyncPathFinder;
 
-
+        //public PathFinder pathFinder = new PathFinder(); // Модуль поиска путей
 
         private Dictionary<BlockPos, float> sumEnergy = new();
 
+
+        private List<Consumer> localConsumers = new List<Consumer>();
+        private List<Producer> localProducers = new List<Producer>();
+        private List<Accumulator> localAccums = new List<Accumulator>();
+        private List<EnergyPacket> localPackets = new List<EnergyPacket>(); // Для пакетов сети
+
+        private List<BlockPos> consumerPositions= new();
+        private List<float> consumerRequests = new();
+        private List<BlockPos> producerPositions = new();
+        private List<float> producerGive = new();
+
+        private List<BlockPos> consumer2Positions = new();
+        private List<float> consumer2Requests = new();
+        private List<BlockPos> producer2Positions = new();
+        private List<float> producer2Give = new();
+
+        private Simulation sim = new();
+        private Simulation sim2 = new();
+
+
+        int[] distances = new int[1];
 
 
         public ICoreAPI api = null!;
@@ -81,13 +103,11 @@ namespace ElectricalProgressive
 
             this.api = api;
 
-            //инициализируем обработчик уронов
-            damageManager = new DamageManager(api);
-
-            listenerId = api.Event.RegisterGameTickListener(this.OnGameTick, tickTimeMs);
-
-
+          
+      
         }
+
+
 
 
         /// <summary>
@@ -166,6 +186,7 @@ namespace ElectricalProgressive
         }
 
 
+        
 
 
 
@@ -190,6 +211,12 @@ namespace ElectricalProgressive
 
             WeatherSystemServer = api.ModLoader.GetModSystem<WeatherSystemServer>();
 
+            //инициализируем обработчик уронов
+            damageManager = new DamageManager(api);
+
+            listenerId = api.Event.RegisterGameTickListener(this.OnGameTick, tickTimeMs);
+
+            asyncPathFinder = new AsyncPathFinder(parts, 4); // 4 - количество параллельных задач
         }
 
 
@@ -291,61 +318,39 @@ namespace ElectricalProgressive
         /// <param name="producerGive"></param>
         /// <param name="sim"></param>
         private void logisticalTask(Network network,
-            BlockPos[] consumerPositions,
-            float[] consumerRequests,
-            BlockPos[] producerPositions,
-            float[] producerGive,
+            List<BlockPos> consumerPositions,
+            List<float> consumerRequests,
+            List<BlockPos> producerPositions,
+            List<float> producerGive,
             Simulation sim)
         {
-            var cP = consumerPositions.Length; // Количество потребителей
-            var pP = producerPositions.Length; // Количество производителей
+            var cP = consumerPositions.Count; // Количество потребителей
+            var pP = producerPositions.Count; // Количество производителей
 
-            int[][] distances = new int[cP][];
-
-            var pathFinder = new PathFinder(network, parts); // Модуль поиска путей
+            Array.Resize(ref distances, cP * pP);
+            
 
             for (int i = 0; i < cP; i++)
             {
-                distances[i] = new int[pP];
-
-
+                
                 for (int j = 0; j < pP; j++)
                 {
                     var start = consumerPositions[i];
                     var end = producerPositions[j];
-                    if (PathCacheManager.TryGet(start, end, network.version,
-                            out var cachedPath,
-                            out _,
-                            out _,
-                            out _))
+                    if (PathCacheManager.TryGet(start, end, network.version, out var cachedPath, out _, out _, out _))
                     {
-                        if (cachedPath != null)
-                        {
-                            distances[i][j] = cachedPath.Length;
-                        }
-                        else
-                        {
-                            distances[i][j] = int.MaxValue;
-                        }
+                        distances[i*pP+j] = cachedPath != null ? cachedPath.Length : int.MaxValue;
                     }
                     else
                     {
-
-                        var (path, facing, processed, usedConn) = pathFinder.FindShortestPath(start, end);
-                        if (path != null)
-                        {
-                            distances[i][j] = path.Length;
-                        }
-                        else
-                        {
-                            distances[i][j] = int.MaxValue;
-                        }
-                        PathCacheManager.AddOrUpdate(start, end, network.version, path, facing, processed, usedConn);
-
+                        asyncPathFinder.EnqueueRequest(start, end, network); // Добавляем запрос в очередь
+                        distances[i * pP + j] = int.MaxValue; // Пока маршрута нет, ставим максимальное значение
                     }
                 }
             }
+
             Store[] stores = new Store[pP];
+            
             Customer[] customers = new Customer[cP];
             int[] distFromCustomerToStore = new int[pP];
 
@@ -360,7 +365,7 @@ namespace ElectricalProgressive
                 distFromCustomerToStore.Fill(0);
                 for (int j = 0; j < pP; j++)
                 {
-                    distFromCustomerToStore[j] = distances[i][j];
+                    distFromCustomerToStore[j] = distances[i * pP + j];
                 }
 
                 customers[i] = new Customer(i, consumerRequests[i], distFromCustomerToStore);
@@ -379,6 +384,61 @@ namespace ElectricalProgressive
 
 
         /// <summary>
+        /// Обновление электрических сетей
+        /// </summary>
+        private void updateNetworks()
+        {
+            if (elapsedMs > 1.0f) //обновляем инфу раз в секунду
+            {
+                foreach (var part in parts.Values)
+                {
+                    // проводники первыми, так как обычно их больше
+                    if (part.Conductor is not null && part.IsLoaded) // Проверяем, что загружен и существует
+                    {
+                        part.Conductor.Update();
+                        continue;
+                    }
+
+                    if (part.Producer is not null && part.IsLoaded) // Проверяем, что загружен и существует
+                    {
+                        part.Producer.Update();
+                        continue;
+                    }
+                    
+                    if (part.Consumer is not null && part.IsLoaded) // Проверяем, что загружен и существует
+                    {
+                        part.Consumer.Update();
+                        continue;
+                    }
+
+                    if (part.Accumulator is not null && part.IsLoaded) // Проверяем, что загружен и существует
+                    {
+                        part.Accumulator.Update();
+                        continue;
+                    }
+
+                    if (part.Transformator is not null && part.IsLoaded) // Проверяем, что загружен и существует
+                    {
+                        part.Transformator.Update();
+                        continue;
+                    }
+                }
+
+                elapsedMs = 0f; // сбросить накопленное время
+            }
+        }
+
+
+
+
+
+
+
+
+
+
+
+        /// <summary>
         /// Тикаем
         /// </summary>
         /// <param name="deltaTime"></param>
@@ -386,7 +446,7 @@ namespace ElectricalProgressive
         {
 
             //Очищаем старые пути
-            if (api.World.Rand.NextDouble() < 0.1d)
+            if (api?.World.Rand.NextDouble() < 0.1d)
             {
                 PathCacheManager.Cleanup();
             }
@@ -394,35 +454,34 @@ namespace ElectricalProgressive
             Cleaner();
 
 
-            //foreach(var network in networks)
-            ParallelHelper.ForEachPartitioned(networks, network =>
+            foreach(var network in networks)
+            
             {
                 // Этап 1: Локальные переменные цикла ----------------------------------------------------------------------------
-                var localConsumers = new List<Consumer>();
-                var localProducers = new List<Producer>();
-                var localAccums = new List<Accumulator>();
-                var localPackets = new List<EnergyPacket>(); // Для пакетов сети
+                localConsumers.Clear();
+                localProducers.Clear();
+                localAccums.Clear();
+                localPackets.Clear(); 
 
-                BlockPos[]? consumerPositions;
-                float[]? consumerRequests;
-                BlockPos[]? producerPositions;
-                float[]? producerGive;
+                consumerPositions.Clear();
+                consumerRequests.Clear();
+                producerPositions.Clear();
+                producerGive.Clear();
+                consumer2Positions.Clear();
+                consumer2Requests.Clear();
+                producer2Positions.Clear();
+                producer2Give.Clear();
 
-                BlockPos[]? consumer2Positions;
-                float[]? consumer2Requests;
-                BlockPos[]? producer2Positions;
-                float[]? producer2Give;
+                sim.Reset();
+                sim2.Reset(); 
 
-                Simulation sim = new();
-                Simulation sim2 = new();
 
 
                 // Этап 2: Сбор запросов от потребителей----------------------------------------------------------------------------
                 var cons = network.Consumers.Count; // Количество потребителей в сети
-                var consIter = 0; // Итератор для потребителей
                 float requestedEnergy; // Запрошенная энергия от потребителей
-                consumerPositions = new BlockPos[cons]; // Позиции потребителей
-                consumerRequests = new float[cons]; // Запросы потребителей
+                consumerPositions = new (cons); // Позиции потребителей
+                consumerRequests = new (cons); // Запросы потребителей
 
                 foreach (var electricConsumer in network.Consumers)
                 {
@@ -432,18 +491,16 @@ namespace ElectricalProgressive
                     {
                         localConsumers.Add(new Consumer(electricConsumer));
                         requestedEnergy = electricConsumer.Consume_request();
-                        consumerPositions[consIter] = electricConsumer.Pos;
-                        consumerRequests[consIter] = requestedEnergy;
-                        consIter++;
+                        consumerPositions.Add(electricConsumer.Pos);
+                        consumerRequests.Add(requestedEnergy);
                     }
                 }
 
                 // Этап 3: Сбор энергии с генераторов и аккумуляторов----------------------------------------------------------------------------
                 var prod = network.Producers.Count + network.Accumulators.Count; // Количество производителей в сети
-                int prodIter = 0; // Итератор для производителей
                 float giveEnergy; // Энергия, которую отдают производители
-                producerPositions = new BlockPos[prod]; // Позиции производителей
-                producerGive = new float[prod]; // Энергия, которую отдают производители
+                producerPositions = new (prod); // Позиции производителей
+                producerGive = new(prod); // Энергия, которую отдают производители
 
                 foreach (var electricProducer in network.Producers)
                 {
@@ -453,9 +510,9 @@ namespace ElectricalProgressive
                     {
                         localProducers.Add(new Producer(electricProducer));
                         giveEnergy = electricProducer.Produce_give();
-                        producerPositions[prodIter] = electricProducer.Pos;
-                        producerGive[prodIter] = giveEnergy;
-                        prodIter++;
+                        producerPositions.Add(electricProducer.Pos); 
+                        producerGive.Add(giveEnergy);
+
                     }
                 }
 
@@ -467,9 +524,9 @@ namespace ElectricalProgressive
                     {
                         localAccums.Add(new Accumulator(electricAccum));
                         giveEnergy = electricAccum.canRelease();
-                        producerPositions[prodIter] = electricAccum.Pos;
-                        producerGive[prodIter] = giveEnergy;
-                        prodIter++;
+                        producerPositions.Add(electricAccum.Pos);
+                        producerGive.Add(giveEnergy);
+
                     }
                 }
 
@@ -544,7 +601,7 @@ namespace ElectricalProgressive
 
 
                 // Этап 5: Забираем у аккумуляторов выданное----------------------------------------------------------------------------
-                consIter = 0; // Итератор
+                int consIter = 0; // Итератор
                 foreach (var accum in localAccums)
                 {
                     if (sim.Stores[consIter + localProducers.Count].Stock < accum.ElectricAccum.canRelease())
@@ -559,31 +616,28 @@ namespace ElectricalProgressive
 
                 // Этап 6: Зарядка аккумуляторов    ----------------------------------------------------------------------------
                 cons = localAccums.Count; // Количество аккумов в сети
-                consIter = 0; // Итератор для потребителей
-                consumer2Positions = new BlockPos[cons]; // Позиции потребителей
-                consumer2Requests = new float[cons]; // Запросы потребителей
-
+                consumer2Positions = new(cons); // Позиции потребителей
+                consumer2Requests = new (cons); // Запросы потребителей
                 foreach (var accum in localAccums)
                 {
                     requestedEnergy = accum.ElectricAccum.canStore();
-                    consumer2Positions[consIter] = accum.ElectricAccum.Pos;
-                    consumer2Requests[consIter] = requestedEnergy;
-                    consIter++;
+                    consumer2Positions.Add(accum.ElectricAccum.Pos);
+                    consumer2Requests.Add(requestedEnergy);
                 }
 
 
 
                 // Этап 7: Остатки генераторов  ----------------------------------------------------------------------------
                 prod = localProducers.Count; // Количество производителей в сети
-                prodIter = 0; // Итератор для производителей
-                producer2Positions = new BlockPos[prod]; // Позиции производителей
-                producer2Give = new float[prod]; // Энергия, которую отдают производители
+                int prodIter = 0; // Итератор для производителей
+                producer2Positions = new(prod); // Позиции производителей
+                producer2Give = new(prod); // Энергия, которую отдают производители
 
                 foreach (var producer in localProducers)
                 {
                     giveEnergy = sim.Stores[prodIter].Stock;
-                    producer2Positions[prodIter] = producer.ElectricProducer.Pos;
-                    producer2Give[prodIter] = giveEnergy;
+                    producer2Positions.Add(producer.ElectricProducer.Pos);
+                    producer2Give.Add(giveEnergy);
                     prodIter++;
                 }
 
@@ -721,56 +775,18 @@ namespace ElectricalProgressive
                 network.MaxCapacity = maxCapacity;
 
 
-
-                lock (globalEnergyPackets)
-                {
-                    globalEnergyPackets.AddRange(localPackets);
-                }
-
-            });
-            //}
+                // добаляем одним разом, чтобы не было лишних операций
+                globalEnergyPackets.AddRange(localPackets);
+                
+                
+            }
 
 
 
             // Обновление электрических компонентов в сети, если прошло достаточно времени около 0.5 секунд
             elapsedMs += deltaTime;
-            if (elapsedMs > 0.5f)
-            {
-                foreach (var network in networks)
-                {
-                    foreach (var electricTransformator in network.Transformators)
-                    {
-                        if (parts.TryGetValue(electricTransformator.Pos, out var part) && part.IsLoaded)
-                            electricTransformator.Update();
-                    }
+            updateNetworks();
 
-                    foreach (var electricConductor in network.Conductors)
-                    {
-                        if (parts.TryGetValue(electricConductor.Pos, out var part) && part.IsLoaded)
-                            electricConductor.Update();
-                    }
-
-                    foreach (var electricConsumer in network.Consumers)
-                    {
-                        if (parts.TryGetValue(electricConsumer.Pos, out var part) && part.IsLoaded)
-                            electricConsumer.Update();
-                    }
-
-                    foreach (var electricProducer in network.Producers)
-                    {
-                        if (parts.TryGetValue(electricProducer.Pos, out var part) && part.IsLoaded)
-                            electricProducer.Update();
-                    }
-
-                    foreach (var electricAccum in network.Accumulators)
-                    {
-                        if (parts.TryGetValue(electricAccum.Pos, out var part) && part.IsLoaded)
-                            electricAccum.Update();
-                    }
-                }
-
-                elapsedMs = 0f; // сбросить накопленное время
-            }
 
 
 
@@ -940,6 +956,9 @@ namespace ElectricalProgressive
                     }
                 }
 
+
+                //Удаление ненужных пакетов
+                globalEnergyPackets.RemoveAll(p => p.shouldBeRemoved);
 
 
                 foreach (var pair in sumEnergy)
@@ -1645,7 +1664,7 @@ namespace ElectricalProgressive
 
                     foreach (var blockFacing2 in FacingHelper.Faces(facing))
                     {
-                        if (part.Networks[blockFacing2.Index] is { } networkk && part.current[blockFacing2.Index] > 0.0F)
+                        if (part.Networks[blockFacing2.Index]is not null && part.current[blockFacing2.Index] > 0.0F)
                         {
                             blockFacing = blockFacing2;
                             searchIndex = blockFacing2.Index;
