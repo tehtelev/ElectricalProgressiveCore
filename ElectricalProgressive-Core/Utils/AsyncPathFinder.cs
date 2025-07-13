@@ -34,6 +34,7 @@ namespace ElectricalProgressive.Utils
             {
                 Task.Factory.StartNew(() => ProcessRequests(), TaskCreationOptions.LongRunning)
                     .ConfigureAwait(false);                     // Используем LongRunning для выделенных потоков
+                //Task.Run(() => ProcessRequests());
             }
         }
 
@@ -46,8 +47,8 @@ namespace ElectricalProgressive.Utils
         /// <param name="network"></param>
         public void EnqueueRequest(BlockPos start, BlockPos end, Network network)
         {
-            // если очередь пуста, то можно снова заполнять
-            if (requestQueue.Count == 0)
+            // если очередь пуста считай, то можно снова заполнять
+            if (requestQueue.Count < 100)
                 busy = false;
 
             // если очередь меньше 1000 и не занята, то добавляем запрос

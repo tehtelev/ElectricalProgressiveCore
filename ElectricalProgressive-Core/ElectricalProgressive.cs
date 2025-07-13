@@ -90,7 +90,9 @@ namespace ElectricalProgressive
 
         int envUpdater = 0;
 
-        private long listenerId;
+        private long listenerId1;
+        private long listenerId2;
+
         private NetworkInformation result = new();
 
         /// <summary>
@@ -118,10 +120,16 @@ namespace ElectricalProgressive
             base.Dispose();
 
             // Удаляем слушатель тиков игры
-            if (api != null)
+            if (sapi != null)
             {
-                api.Event.UnregisterGameTickListener(listenerId);
+                sapi.Event.UnregisterGameTickListener(listenerId1);
+                asyncPathFinder.Stop();
             }
+            if (capi != null)
+            {
+                capi.Event.UnregisterGameTickListener(listenerId2);
+            }
+
 
             // Очистка глобальных коллекций и ресурсов
 
@@ -183,6 +191,8 @@ namespace ElectricalProgressive
             this.capi = api;
             RegisterAltKeys();
 
+
+            listenerId2 = capi.Event.RegisterGameTickListener(this.OnGameTickClient, tickTimeMs);
         }
 
 
@@ -209,14 +219,14 @@ namespace ElectricalProgressive
 
             this.sapi = api;
 
-            WeatherSystemServer = api.ModLoader.GetModSystem<WeatherSystemServer>();
+            WeatherSystemServer = sapi.ModLoader.GetModSystem<WeatherSystemServer>();
 
             //инициализируем обработчик уронов
             damageManager = new DamageManager(api);
 
-            listenerId = api.Event.RegisterGameTickListener(this.OnGameTick, tickTimeMs);
+            listenerId1 = sapi.Event.RegisterGameTickListener(this.OnGameTickServer, tickTimeMs);
 
-            asyncPathFinder = new AsyncPathFinder(parts, 4); // 4 - количество параллельных задач
+            asyncPathFinder = new AsyncPathFinder(parts, 6); // 4 - количество параллельных задач
         }
 
 
@@ -327,16 +337,17 @@ namespace ElectricalProgressive
             var cP = consumerPositions.Count; // Количество потребителей
             var pP = producerPositions.Count; // Количество производителей
 
+            BlockPos start;
+            BlockPos end;
+
             Array.Resize(ref distances, cP * pP);
-            
 
             for (int i = 0; i < cP; i++)
             {
-                
                 for (int j = 0; j < pP; j++)
                 {
-                    var start = consumerPositions[i];
-                    var end = producerPositions[j];
+                    start = consumerPositions[i];
+                    end = producerPositions[j];
                     if (PathCacheManager.TryGet(start, end, network.version, out var cachedPath, out _, out _, out _))
                     {
                         distances[i*pP+j] = cachedPath != null ? cachedPath.Length : int.MaxValue;
@@ -438,11 +449,103 @@ namespace ElectricalProgressive
 
 
 
+
+
         /// <summary>
-        /// Тикаем
+        /// Тикаем клиент
         /// </summary>
         /// <param name="deltaTime"></param>
-        private void OnGameTick(float deltaTime)
+        private void OnGameTickClient(float deltaTime)
+        {
+
+            foreach (var network in networks)
+            {
+                // Обновляем инфу об электрических цепях
+
+                // расчет емкости
+                float capacity = 0f; // Суммарная емкость сети
+                float maxCapacity = 0f; // Максимальная емкость сети
+
+                foreach (var electricAccum in network.Accumulators)
+                {
+                    if (network.PartPositions.Contains(electricAccum.Pos)   // Проверяем, что аккумулятор находится в части сети
+                        && parts[electricAccum.Pos].IsLoaded)               // Проверяем, что аккумулятор загружен
+                    // Проверяем, что аккумулятор может отдать энергию вообще
+                    {
+                        capacity += electricAccum.GetCapacity();
+                        maxCapacity += electricAccum.GetMaxCapacity();
+                    }
+
+
+                }
+
+                network.Capacity = capacity;
+                network.MaxCapacity = maxCapacity;
+
+
+
+                // Расчет производства (чистая генерация генераторами)
+                float production = 0f;
+                foreach (var electricProducer in network.Producers)
+                {
+                    if (network.PartPositions.Contains(electricProducer.Pos)    // Проверяем, что генератор находится в части сети
+                        && parts[electricProducer.Pos].IsLoaded)                // Проверяем, что генератор загружен
+                    {
+                        production += Math.Min(electricProducer.getPowerGive(), electricProducer.getPowerOrder());
+                    }
+                }
+
+                network.Production = production;
+
+
+                // Расчет необходимой энергии для потребителей!
+                float requestSum = 0f;
+                foreach (var electricConsumer in network.Consumers)
+                {
+                    if (network.PartPositions.Contains(electricConsumer.Pos) // Проверяем, что потребитель находится в части сети
+                        && parts[electricConsumer.Pos].IsLoaded) // Проверяем, что потребитель загружен
+                    {
+                        requestSum += electricConsumer.getPowerRequest();
+                    }
+                }
+
+                network.Request = Math.Max(requestSum, 0f);
+
+
+                // Расчет потребления (только потребителями)
+                float consumption = 0f;
+
+                // потребление в первой симуляции
+                foreach (var electricConsumer in network.Consumers)
+                {
+                    if (network.PartPositions.Contains(electricConsumer.Pos) // Проверяем, что потребитель находится в части сети
+                        && parts[electricConsumer.Pos].IsLoaded) // Проверяем, что потребитель загружен
+                    {
+                        consumption += electricConsumer.getPowerReceive();
+                    }
+                }
+
+
+                network.Consumption = consumption;
+
+
+
+
+
+            }
+
+        }
+
+
+
+
+
+
+        /// <summary>
+        /// Тикаем сервер
+        /// </summary>
+        /// <param name="deltaTime"></param>
+        private void OnGameTickServer(float deltaTime)
         {
 
             //Очищаем старые пути
@@ -455,7 +558,6 @@ namespace ElectricalProgressive
 
 
             foreach(var network in networks)
-            
             {
                 // Этап 1: Локальные переменные цикла ----------------------------------------------------------------------------
                 localConsumers.Clear();
@@ -615,16 +717,25 @@ namespace ElectricalProgressive
 
 
                 // Этап 6: Зарядка аккумуляторов    ----------------------------------------------------------------------------
-                cons = localAccums.Count; // Количество аккумов в сети
+                cons = network.Accumulators.Count; // Количество аккумов в сети
                 consumer2Positions = new(cons); // Позиции потребителей
-                consumer2Requests = new (cons); // Запросы потребителей
-                foreach (var accum in localAccums)
+                consumer2Requests = new(cons); // Запросы потребителей
+                localAccums.Clear();
+                foreach (var electricAccum in network.Accumulators)
                 {
-                    requestedEnergy = accum.ElectricAccum.canStore();
-                    consumer2Positions.Add(accum.ElectricAccum.Pos);
-                    consumer2Requests.Add(requestedEnergy);
+                    if (network.PartPositions.Contains(electricAccum.Pos)   // Проверяем, что аккумулятор находится в части сети
+                        && parts[electricAccum.Pos].IsLoaded)                // Проверяем, что аккумулятор загружен
+                                                                             // Проверяем, что аккумулятор может отдать энергию вообще
+                    {
+                        localAccums.Add(new Accumulator(electricAccum));
+                        requestedEnergy = electricAccum.canStore();
+                        consumer2Positions.Add(electricAccum.Pos);
+                        consumer2Requests.Add(requestedEnergy);
+                    }
                 }
 
+
+                
 
 
                 // Этап 7: Остатки генераторов  ----------------------------------------------------------------------------
@@ -716,64 +827,7 @@ namespace ElectricalProgressive
                     j++;
                 }
 
-
-
-                // Этап 10: Обновление статистики сети ----------------------------------------------------------------------------
-
-                // Расчет потребления (только потребителями)
-                float consumption = 0f;
-
-                // потребление в первой симуляции
-                foreach (var customer in sim.Customers)
-                {
-                    foreach (var store in sim.Stores)
-                    {
-                        var value = customer.Received[store.Id];
-                        if (value > 0)
-                        {
-                            consumption += value;
-                        }
-                    }
-                }
-
-
-                network.Consumption = consumption;
-
-
-                // Расчет производства (чистая генерация генераторами)
-                float production = 0f;
-                foreach (var producer in localProducers)
-                {
-                    production += Math.Min(producer.ElectricProducer.getPowerGive(),
-                        producer.ElectricProducer.getPowerOrder());
-                }
-
-                network.Production = production;
-
-
-                // Расчет необходимой энергии для потребителей!
-                float requestSum = 0f;
-                foreach (var consumer in localConsumers)
-                {
-                    requestSum += consumer.ElectricConsumer.getPowerRequest();
-                }
-
-                network.Request = Math.Max(requestSum, 0f);
-
-
-
-                float capacity = 0f; // Суммарная емкость сети
-                float maxCapacity = 0f; // Максимальная емкость сети
-
-                foreach (var a in localAccums)
-                {
-                    capacity += a.ElectricAccum.GetCapacity();
-                    maxCapacity += a.ElectricAccum.GetMaxCapacity();
-                }
-
-                network.Capacity = capacity;
-                network.MaxCapacity = maxCapacity;
-
+                
 
                 // добаляем одним разом, чтобы не было лишних операций
                 globalEnergyPackets.AddRange(localPackets);
