@@ -110,19 +110,10 @@ namespace ElectricalProgressive.Utils
         /// Принудительно удаляет из кэша все записи для указанных координат start и end
         /// независимо от version.
         /// </summary>
-        public static void RemoveAll(BlockPos start, BlockPos end)
+        public static void RemoveAll(BlockPos start, BlockPos end, int version)
         {
-            // Собираем ключи, которые нужно удалить, чтобы не модифицировать
-            // словарь прямо во время перебора.
-            var keysToRemove = cache
-                .Where(pair => pair.Key.Item1.Equals(start) && pair.Key.Item2.Equals(end))
-                .Select(pair => pair.Key)
-                .ToList();
-
-            foreach (var key in keysToRemove)
-            {
-                cache.TryRemove(key, out _);
-            }
+            var key = (start, end, version);
+            cache.TryRemove(key, out _);
         }
     }
     

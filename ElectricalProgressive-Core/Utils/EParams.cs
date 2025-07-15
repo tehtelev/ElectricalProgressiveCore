@@ -21,6 +21,7 @@ namespace ElectricalProgressive.Utils
         public bool isolatedEnvironment; //изолированный от окружающей среды проводник
         public byte causeBurnout;   //причина сгорания (0 - не сгорел, 1 - перегрузка по току, 2 - неверное напряжение, 3 - окружающая среда)
         public int ticksBeforeBurnout; //количество тиков, которые накопил проводник
+        public float current;            //ток проходящий тут
 
         /// <summary>
         /// Конструктор для создания параметров проводника/приборов
@@ -35,7 +36,18 @@ namespace ElectricalProgressive.Utils
         /// <param name="isolated"></param>
         /// <param name="isolatedEnvironment"></param>
         /// <param name="causeBurnout"></param>
-        public EParams(int voltage, float maxCurrent, string material, float resistivity, byte lines, float crossArea, bool burnout, bool isolated, bool isolatedEnvironment, byte causeBurnout=0)
+        public EParams(int voltage,
+            float maxCurrent,
+            string material,
+            float resistivity,
+            byte lines,
+            float crossArea,
+            bool burnout,
+            bool isolated,
+            bool isolatedEnvironment, 
+            byte causeBurnout=0,
+            float current = 0.0F
+            )
         {
             this.voltage = voltage;
             this.maxCurrent = maxCurrent;
@@ -48,6 +60,7 @@ namespace ElectricalProgressive.Utils
             this.isolatedEnvironment = isolatedEnvironment;
             this.causeBurnout = causeBurnout;
             this.ticksBeforeBurnout = 0;
+            this.current = current;
         }
 
 
@@ -67,6 +80,7 @@ namespace ElectricalProgressive.Utils
             isolatedEnvironment = true;
             causeBurnout = 0;
             ticksBeforeBurnout = 0;
+            current = 0.0F;
         }
 
         /// <summary>
@@ -111,7 +125,8 @@ namespace ElectricalProgressive.Utils
                    isolated == other.isolated &&
                    isolatedEnvironment == other.isolatedEnvironment &&
                    causeBurnout == other.causeBurnout &&
-                   ticksBeforeBurnout == other.ticksBeforeBurnout;
+                   ticksBeforeBurnout == other.ticksBeforeBurnout &&
+                   current.Equals(other.current);
 
         }
 
@@ -146,6 +161,7 @@ namespace ElectricalProgressive.Utils
                 hash = hash * 31 + isolatedEnvironment.GetHashCode();
                 hash = hash * 31 + causeBurnout;
                 hash = hash * 31 + ticksBeforeBurnout;
+                hash = hash * 31 + current.GetHashCode();
                 return hash;
             }
         }

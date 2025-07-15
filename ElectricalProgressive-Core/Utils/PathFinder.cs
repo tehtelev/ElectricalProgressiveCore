@@ -28,6 +28,9 @@ public class PathFinder
         Facing.NorthAll, Facing.EastAll, Facing.SouthAll, Facing.WestAll, Facing.UpAll, Facing.DownAll
     };
 
+    // Переменные используемые в ReconstructPath, чтобы избежать очень частых аллокаций
+    BlockPos[] pathArray = new BlockPos[1];
+    int[] faceArray = new int[1];
 
 
     // Переменные используемые в GetNeighbors, чтобы избежать очень частых аллокаций
@@ -118,7 +121,7 @@ public class PathFinder
 
         //очередь обработки
 
-        queue.Enqueue((start, startBlockFacing[0]),0);
+        queue.Enqueue((start, startBlockFacing[0]), 0);
 
         //хранит цепочку пути и грань
 
@@ -174,8 +177,7 @@ public class PathFinder
             (buf1, buf2, buf3, buf4) = GetNeighbors(currentPos, processedFaces[currentPos], facingFrom[(currentPos, currentFace)], network, parts);
 
 
-
-            processedFaces[currentPos] = buf4;    //обновляем информацию о всех просчитанных гранях     
+            processedFaces[currentPos] = buf4;    //обновляем информацию о всех просчитанных гранях
 
             int i = 0;
             foreach (var neighbor in buf1)
@@ -184,9 +186,9 @@ public class PathFinder
                 int priority = Heuristic(neighbor, end); // Приоритет = эвристика
                 if (!processedFaces[neighbor][buf2[i]]   // проверяем, что грань соседа еще не обработана
                     && !cameFrom.ContainsKey(state)      // проверяем, что состояние еще не посещали
-                    && priority<200)                     // ограничение на приоритет, чтобы не зацикливаться на бесконечном поиске
+                    && priority < 200)                     // ограничение на приоритет, чтобы не зацикливаться на бесконечном поиске
                 {
-                    
+
                     queue.Enqueue(state, priority);
 
                     cameFrom[state] = (currentPos, facingFrom[(currentPos, currentFace)]);
@@ -200,7 +202,7 @@ public class PathFinder
                 i++;
             }
 
-            
+
 
             //if (cameFrom.Count > 1000)
             //{ // Ограничение на количество посещенных состояний
@@ -244,7 +246,7 @@ public class PathFinder
             if (npf[5]) result |= partConn & Facing.DownAll;
             nowProcessingFaces[i] = result;
         }
-        
+
 
         return (path, facingFromList, nowProcessedFacesList, nowProcessingFaces);
     }
@@ -329,11 +331,13 @@ public class PathFinder
         {
             // ищем соседей по граням
             var directionFilter = FacingHelper.FromDirection(direction);
-            
+
             neighborPosition = part.Position.AddCopy(direction);
+
 
             if (parts.TryGetValue(neighborPosition, out var neighborPart))
             {
+
                 FacingHelper.FillFaces(hereConnections & directionFilter, bufForFaces);
                 foreach (var face in bufForFaces)
                 {
@@ -355,6 +359,8 @@ public class PathFinder
                         processFaces[face.Index] = true;
                     }
                 }
+
+
             }
 
             // ищем соседей по ребрам
@@ -386,6 +392,7 @@ public class PathFinder
                         processFaces[face.Index] = true;
                     }
                 }
+
             }
 
 
@@ -396,7 +403,7 @@ public class PathFinder
             foreach (var face in bufForFaces)
             {
                 neighborPosition = part.Position.AddCopy(face);
-
+                
                 if (parts.TryGetValue(neighborPosition, out neighborPart))
                 {
                     var oppFace = face.Opposite;
@@ -417,6 +424,7 @@ public class PathFinder
                         processFaces[face.Index] = true;
                     }
                 }
+
 
             }
         }
@@ -458,8 +466,12 @@ public class PathFinder
         }
 
         // 2) Аллокация массивов ровно под нужный размер
-        var pathArray = new BlockPos[length];
-        var faceArray = new int[length];
+        Array.Resize(ref pathArray, length);
+        Array.Resize(ref faceArray, length);
+
+
+        //var pathArray = new BlockPos[length];
+        //var faceArray = new int[length];
 
         // 3) Второй проход: заполняем массивы с конца в начало
         current = (end, endFacing);

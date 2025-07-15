@@ -52,7 +52,7 @@ namespace ElectricalProgressive
         private List<Accumulator> localAccums = new List<Accumulator>();
         private List<EnergyPacket> localPackets = new List<EnergyPacket>(); // Для пакетов сети
 
-        private List<BlockPos> consumerPositions= new();
+        private List<BlockPos> consumerPositions = new();
         private List<float> consumerRequests = new();
         private List<BlockPos> producerPositions = new();
         private List<float> producerGive = new();
@@ -81,9 +81,8 @@ namespace ElectricalProgressive
 
 
         public static int speedOfElectricity; // Скорость электричества в проводах (блоков в тик)
-        public static bool instant; // Расчет мгновенно?
         public static int timeBeforeBurnout; // Время до сгорания проводника в секундах
-        public static bool multiThreading; // Многопоточный расчет? (включает ли мод многопоточность для расчета электричества)
+        public static int multiThreading; // сколько потоков использовать
 
         int tickTimeMs;
         private float elapsedMs = 0f;
@@ -91,7 +90,7 @@ namespace ElectricalProgressive
         int envUpdater = 0;
 
         private long listenerId1;
-        private long listenerId2;
+        //private long listenerId2;
 
         private NetworkInformation result = new();
 
@@ -105,8 +104,7 @@ namespace ElectricalProgressive
 
             this.api = api;
 
-          
-      
+
         }
 
 
@@ -125,10 +123,10 @@ namespace ElectricalProgressive
                 sapi.Event.UnregisterGameTickListener(listenerId1);
                 asyncPathFinder.Stop();
             }
-            if (capi != null)
-            {
-                capi.Event.UnregisterGameTickListener(listenerId2);
-            }
+            //if (capi != null)
+            //{
+            //    capi.Event.UnregisterGameTickListener(listenerId2);
+            //}
 
 
             // Очистка глобальных коллекций и ресурсов
@@ -165,17 +163,12 @@ namespace ElectricalProgressive
             api.StoreModConfig(config, "ElectricityConfig.json");
 
             speedOfElectricity = Math.Clamp(config.speedOfElectricity, 1, 16);
-            instant = config.instant;
-            timeBeforeBurnout = Math.Clamp(config.timeBeforeBurnout, 1, 600);
-            multiThreading = config.multiThreading;
 
-            //устанавливаем частоту просчета сети
-            if (instant)
-                tickTimeMs = 1000;
-            else
-            {
-                tickTimeMs = 1000 / speedOfElectricity;
-            }
+            timeBeforeBurnout = Math.Clamp(config.timeBeforeBurnout, 1, 600);
+            multiThreading = Math.Clamp(config.multiThreading, 2, 32);
+
+
+            tickTimeMs = 1000 / speedOfElectricity;
 
 
         }
@@ -191,12 +184,12 @@ namespace ElectricalProgressive
             this.capi = api;
             RegisterAltKeys();
 
-
-            listenerId2 = capi.Event.RegisterGameTickListener(this.OnGameTickClient, tickTimeMs);
+            
+            //listenerId2 = capi.Event.RegisterGameTickListener(this.OnGameTickClient, tickTimeMs);
         }
 
 
-        
+
 
 
 
@@ -226,7 +219,7 @@ namespace ElectricalProgressive
 
             listenerId1 = sapi.Event.RegisterGameTickListener(this.OnGameTickServer, tickTimeMs);
 
-            asyncPathFinder = new AsyncPathFinder(parts, 6); // 4 - количество параллельных задач
+            asyncPathFinder = new AsyncPathFinder(parts, ElectricalProgressive.multiThreading); // вычислитель параллельных задач поиска путей
         }
 
 
@@ -350,7 +343,7 @@ namespace ElectricalProgressive
                     end = producerPositions[j];
                     if (PathCacheManager.TryGet(start, end, network.version, out var cachedPath, out _, out _, out _))
                     {
-                        distances[i*pP+j] = cachedPath != null ? cachedPath.Length : int.MaxValue;
+                        distances[i * pP + j] = cachedPath != null ? cachedPath.Length : int.MaxValue;
                     }
                     else
                     {
@@ -361,7 +354,7 @@ namespace ElectricalProgressive
             }
 
             Store[] stores = new Store[pP];
-            
+
             Customer[] customers = new Customer[cP];
             int[] distFromCustomerToStore = new int[pP];
 
@@ -415,7 +408,7 @@ namespace ElectricalProgressive
                         part.Producer.Update();
                         continue;
                     }
-                    
+
                     if (part.Consumer is not null && part.IsLoaded) // Проверяем, что загружен и существует
                     {
                         part.Consumer.Update();
@@ -448,7 +441,7 @@ namespace ElectricalProgressive
 
 
 
-
+        /*
 
 
         /// <summary>
@@ -458,8 +451,281 @@ namespace ElectricalProgressive
         private void OnGameTickClient(float deltaTime)
         {
 
+
+
+        }
+
+
+
+        */
+
+
+        /// <summary>
+        /// Тикаем сервер
+        /// </summary>
+        /// <param name="deltaTime"></param>
+        private void OnGameTickServer(float deltaTime)
+        {
+
+            //Очищаем старые пути
+            if (api?.World.Rand.NextDouble() < 0.1d)
+            {
+                PathCacheManager.Cleanup();
+            }
+
+            Cleaner();
+
+
             foreach (var network in networks)
             {
+                // Этап 1: Локальные переменные цикла ----------------------------------------------------------------------------
+                localConsumers.Clear();
+                localProducers.Clear();
+                localAccums.Clear();
+                localPackets.Clear();
+
+                consumerPositions.Clear();
+                consumerRequests.Clear();
+                producerPositions.Clear();
+                producerGive.Clear();
+                consumer2Positions.Clear();
+                consumer2Requests.Clear();
+                producer2Positions.Clear();
+                producer2Give.Clear();
+
+                sim.Reset();
+                sim2.Reset();
+
+
+
+                // Этап 2: Сбор запросов от потребителей----------------------------------------------------------------------------
+                var cons = network.Consumers.Count; // Количество потребителей в сети
+                float requestedEnergy; // Запрошенная энергия от потребителей
+                consumerPositions = new(cons); // Позиции потребителей
+                consumerRequests = new(cons); // Запросы потребителей
+
+                foreach (var electricConsumer in network.Consumers)
+                {
+                    if (network.PartPositions.Contains(electricConsumer.Pos) // Проверяем, что потребитель находится в части сети
+                        && parts[electricConsumer.Pos].IsLoaded              // Проверяем, что потребитель загружен
+                        && electricConsumer.Consume_request() > 0)             // Проверяем, что потребитель запрашивает энергию вообще
+                    {
+                        localConsumers.Add(new Consumer(electricConsumer));
+                        requestedEnergy = electricConsumer.Consume_request();
+                        consumerPositions.Add(electricConsumer.Pos);
+                        consumerRequests.Add(requestedEnergy);
+                    }
+                }
+
+                // Этап 3: Сбор энергии с генераторов и аккумуляторов----------------------------------------------------------------------------
+                var prod = network.Producers.Count + network.Accumulators.Count; // Количество производителей в сети
+                float giveEnergy; // Энергия, которую отдают производители
+                producerPositions = new(prod); // Позиции производителей
+                producerGive = new(prod); // Энергия, которую отдают производители
+
+                foreach (var electricProducer in network.Producers)
+                {
+                    if (network.PartPositions.Contains(electricProducer.Pos) // Проверяем, что генератор находится в части сети
+                        && parts[electricProducer.Pos].IsLoaded              // Проверяем, что генератор загружен
+                        && electricProducer.Produce_give() > 0)                // Проверяем, что генератор отдает энергию вообще
+                    {
+                        localProducers.Add(new Producer(electricProducer));
+                        giveEnergy = electricProducer.Produce_give();
+                        producerPositions.Add(electricProducer.Pos);
+                        producerGive.Add(giveEnergy);
+
+                    }
+                }
+
+                foreach (var electricAccum in network.Accumulators)
+                {
+                    if (network.PartPositions.Contains(electricAccum.Pos)   // Проверяем, что аккумулятор находится в части сети
+                        && parts[electricAccum.Pos].IsLoaded                // Проверяем, что аккумулятор загружен
+                        && electricAccum.canRelease() > 0)                    // Проверяем, что аккумулятор может отдать энергию вообще
+                    {
+                        localAccums.Add(new Accumulator(electricAccum));
+                        giveEnergy = electricAccum.canRelease();
+                        producerPositions.Add(electricAccum.Pos);
+                        producerGive.Add(giveEnergy);
+
+                    }
+                }
+
+                // Этап 4: Распределение энергии ----------------------------------------------------------------------------
+                logisticalTask(network, consumerPositions, consumerRequests, producerPositions, producerGive, sim);
+
+
+
+                EnergyPacket packet;   // Временная переменная для пакета энергии
+                BlockPos posStore; // Позиция магазина в мире
+                BlockPos posCustomer; // Позиция потребителя в мире
+                int customCount = sim.Customers.Count; // Количество клиентов в симуляции 2
+                int storeCount = sim.Stores.Count; // Количество магазинов в симуляции 2
+                int k=0;
+                for (int i = 0; i < customCount; i++)
+                {
+                    for (k = 0; k < storeCount; k++)
+                    {
+                        var value = sim.Customers[i].Received[sim.Stores[k].Id];
+                        if (value > 0)
+                        {
+                            posStore = producerPositions[k];
+                            posCustomer = consumerPositions[i];
+
+                            if (PathCacheManager.TryGet(posCustomer, posStore, network.version, out var path,
+                                    out var facing, out var processed, out var usedConn))
+                            {
+                                // Проверяем, что пути и направления не равны null
+                                if (path == null ||
+                                    facing == null ||
+                                    processed == null ||
+                                    usedConn == null)
+                                    continue;
+
+                                // создаём пакет, не копируя ничего
+                                packet = new EnergyPacket(
+                                    value,
+                                    parts[posStore].eparams[facing.Last()].voltage,
+                                    path.Length - 1,
+                                    path,
+                                    facing,
+                                    processed,
+                                    usedConn,
+                                    network.version
+                                );
+
+
+                                // Добавляем пакет в глобальный список
+                                localPackets.Add(packet);
+                            }
+
+                        }
+
+
+                    }
+                }
+
+
+
+
+
+
+
+                // Этап 5: Забираем у аккумуляторов выданное----------------------------------------------------------------------------
+                int consIter = 0; // Итератор
+                foreach (var accum in localAccums)
+                {
+                    if (sim.Stores[consIter + localProducers.Count].Stock < accum.ElectricAccum.canRelease())
+                    {
+                        accum.ElectricAccum.Release(accum.ElectricAccum.canRelease() -
+                                                    sim.Stores[consIter + localProducers.Count].Stock);
+                    }
+
+                    consIter++;
+                }
+
+
+                // Этап 6: Зарядка аккумуляторов    ----------------------------------------------------------------------------
+                cons = network.Accumulators.Count; // Количество аккумов в сети
+                consumer2Positions = new(cons); // Позиции потребителей
+                consumer2Requests = new(cons); // Запросы потребителей
+                localAccums.Clear();
+                foreach (var electricAccum in network.Accumulators)
+                {
+                    if (network.PartPositions.Contains(electricAccum.Pos)   // Проверяем, что аккумулятор находится в части сети
+                        && parts[electricAccum.Pos].IsLoaded)                // Проверяем, что аккумулятор загружен
+                                                                             // Проверяем, что аккумулятор может отдать энергию вообще
+                    {
+                        localAccums.Add(new Accumulator(electricAccum));
+                        requestedEnergy = electricAccum.canStore();
+                        consumer2Positions.Add(electricAccum.Pos);
+                        consumer2Requests.Add(requestedEnergy);
+                    }
+                }
+
+
+
+
+
+                // Этап 7: Остатки генераторов  ----------------------------------------------------------------------------
+                prod = localProducers.Count; // Количество производителей в сети
+                int prodIter = 0; // Итератор для производителей
+                producer2Positions = new(prod); // Позиции производителей
+                producer2Give = new(prod); // Энергия, которую отдают производители
+
+                foreach (var producer in localProducers)
+                {
+                    giveEnergy = sim.Stores[prodIter].Stock;
+                    producer2Positions.Add(producer.ElectricProducer.Pos);
+                    producer2Give.Add(giveEnergy);
+                    prodIter++;
+                }
+
+
+                // Этап 8: Распределение энергии для аккумуляторов ----------------------------------------------------------------------------
+                logisticalTask(network, consumer2Positions, consumer2Requests, producer2Positions, producer2Give, sim2);
+
+
+                customCount = sim2.Customers.Count; // Количество клиентов в симуляции 2
+                storeCount = sim2.Stores.Count; // Количество магазинов в симуляции 2
+
+                for (int i = 0; i < customCount; i++)
+                {
+                    for (k = 0; k < storeCount; k++)
+                    {
+                        var value = sim2.Customers[i].Received[sim2.Stores[k].Id];
+                        if (value > 0)
+                        {
+                            posStore = producer2Positions[k];
+                            posCustomer = consumer2Positions[i];
+
+                            if (PathCacheManager.TryGet(posCustomer, posStore, network.version, out var path,
+                                    out var facing, out var processed, out var usedConn))
+                            {
+                                // Проверяем, что пути и направления не равны null
+                                if (path == null ||
+                                    facing == null ||
+                                    processed == null ||
+                                    usedConn == null)
+                                    continue;
+
+                                // создаём пакет, не копируя ничего
+                                packet = new EnergyPacket(
+                                    value,
+                                    parts[posStore].eparams[facing.Last()].voltage,
+                                    path.Length - 1,
+                                    path,
+                                    facing,
+                                    processed,
+                                    usedConn,
+                                    network.version
+                                );
+
+
+                                // Добавляем пакет в глобальный список
+                                localPackets.Add(packet);
+                            }
+
+                        }
+                    }
+                }
+
+
+
+
+
+                // Этап 9: Сообщение генераторам о нагрузке ----------------------------------------------------------------------------
+                int j = 0;
+                foreach (var producer in localProducers)
+                {
+                    var totalOrder = sim.Stores[j].totalRequest + sim2.Stores[j].totalRequest;
+                    producer.ElectricProducer.Produce_order(totalOrder);
+                    j++;
+                }
+
+
+
+
                 // Обновляем инфу об электрических цепях
 
                 // расчет емкости
@@ -532,307 +798,13 @@ namespace ElectricalProgressive
 
 
 
-            }
-
-        }
 
 
-
-
-
-
-        /// <summary>
-        /// Тикаем сервер
-        /// </summary>
-        /// <param name="deltaTime"></param>
-        private void OnGameTickServer(float deltaTime)
-        {
-
-            //Очищаем старые пути
-            if (api?.World.Rand.NextDouble() < 0.1d)
-            {
-                PathCacheManager.Cleanup();
-            }
-
-            Cleaner();
-
-
-            foreach(var network in networks)
-            {
-                // Этап 1: Локальные переменные цикла ----------------------------------------------------------------------------
-                localConsumers.Clear();
-                localProducers.Clear();
-                localAccums.Clear();
-                localPackets.Clear(); 
-
-                consumerPositions.Clear();
-                consumerRequests.Clear();
-                producerPositions.Clear();
-                producerGive.Clear();
-                consumer2Positions.Clear();
-                consumer2Requests.Clear();
-                producer2Positions.Clear();
-                producer2Give.Clear();
-
-                sim.Reset();
-                sim2.Reset(); 
-
-
-
-                // Этап 2: Сбор запросов от потребителей----------------------------------------------------------------------------
-                var cons = network.Consumers.Count; // Количество потребителей в сети
-                float requestedEnergy; // Запрошенная энергия от потребителей
-                consumerPositions = new (cons); // Позиции потребителей
-                consumerRequests = new (cons); // Запросы потребителей
-
-                foreach (var electricConsumer in network.Consumers)
-                {
-                    if (network.PartPositions.Contains(electricConsumer.Pos) // Проверяем, что потребитель находится в части сети
-                        && parts[electricConsumer.Pos].IsLoaded              // Проверяем, что потребитель загружен
-                        && electricConsumer.Consume_request()>0)             // Проверяем, что потребитель запрашивает энергию вообще
-                    {
-                        localConsumers.Add(new Consumer(electricConsumer));
-                        requestedEnergy = electricConsumer.Consume_request();
-                        consumerPositions.Add(electricConsumer.Pos);
-                        consumerRequests.Add(requestedEnergy);
-                    }
-                }
-
-                // Этап 3: Сбор энергии с генераторов и аккумуляторов----------------------------------------------------------------------------
-                var prod = network.Producers.Count + network.Accumulators.Count; // Количество производителей в сети
-                float giveEnergy; // Энергия, которую отдают производители
-                producerPositions = new (prod); // Позиции производителей
-                producerGive = new(prod); // Энергия, которую отдают производители
-
-                foreach (var electricProducer in network.Producers)
-                {
-                    if (network.PartPositions.Contains(electricProducer.Pos) // Проверяем, что генератор находится в части сети
-                        && parts[electricProducer.Pos].IsLoaded              // Проверяем, что генератор загружен
-                        && electricProducer.Produce_give()>0)                // Проверяем, что генератор отдает энергию вообще
-                    {
-                        localProducers.Add(new Producer(electricProducer));
-                        giveEnergy = electricProducer.Produce_give();
-                        producerPositions.Add(electricProducer.Pos); 
-                        producerGive.Add(giveEnergy);
-
-                    }
-                }
-
-                foreach (var electricAccum in network.Accumulators)
-                {
-                    if (network.PartPositions.Contains(electricAccum.Pos)   // Проверяем, что аккумулятор находится в части сети
-                        && parts[electricAccum.Pos].IsLoaded                // Проверяем, что аккумулятор загружен
-                        && electricAccum.canRelease()>0)                    // Проверяем, что аккумулятор может отдать энергию вообще
-                    {
-                        localAccums.Add(new Accumulator(electricAccum));
-                        giveEnergy = electricAccum.canRelease();
-                        producerPositions.Add(electricAccum.Pos);
-                        producerGive.Add(giveEnergy);
-
-                    }
-                }
-
-                // Этап 4: Распределение энергии ----------------------------------------------------------------------------
-                logisticalTask(network, consumerPositions, consumerRequests, producerPositions, producerGive, sim);
-
-
-
-                if (!instant) // Медленная передача
-                {
-                    BlockPos posStore; // Позиция магазина в мире
-                    BlockPos posCustomer; // Позиция потребителя в мире
-                    int customCount = sim.Customers.Count; // Количество клиентов в симуляции 2
-                    int storeCount = sim.Stores.Count; // Количество магазинов в симуляции 2
-
-                    for (int i = 0; i < customCount; i++)
-                    {
-                        for (int k = 0; k < storeCount; k++)
-                        {
-                            var value = sim.Customers[i].Received[sim.Stores[k].Id];
-                            if (value > 0)
-                            {
-                                posStore = producerPositions[k];
-                                posCustomer = consumerPositions[i];
-
-                                if (PathCacheManager.TryGet(posCustomer, posStore, network.version, out var path,
-                                        out var facing, out var processed, out var usedConn))
-                                {
-                                    // Проверяем, что пути и направления не равны null
-                                    if (path == null ||
-                                        facing == null ||
-                                        processed == null ||
-                                        usedConn == null)
-                                        continue;
-
-                                    // создаём пакет, не копируя ничего
-                                    var packet = new EnergyPacket(
-                                        value,
-                                        parts[posStore].eparams[facing.Last()].voltage,
-                                        path.Length - 1,
-                                        path,
-                                        facing,
-                                        processed,
-                                        usedConn
-                                    );
-
-
-                                    // Добавляем пакет в глобальный список
-                                    localPackets.Add(packet);
-                                }
-
-                            }
-
-
-                        }
-                    }
-                }
-
-
-                if (instant) // Мгновенная передача
-                {
-                    int i = 0;
-                    float totalGive; // Суммарная энергия, которую нужно отдать
-                    foreach (var consumer in localConsumers)
-                    {
-                        totalGive = sim.Customers[i].Required - sim.Customers[i].Remaining;
-                        consumer.ElectricConsumer.Consume_receive(totalGive);
-                        i++;
-                    }
-                }
-
-
-
-                // Этап 5: Забираем у аккумуляторов выданное----------------------------------------------------------------------------
-                int consIter = 0; // Итератор
-                foreach (var accum in localAccums)
-                {
-                    if (sim.Stores[consIter + localProducers.Count].Stock < accum.ElectricAccum.canRelease())
-                    {
-                        accum.ElectricAccum.Release(accum.ElectricAccum.canRelease() -
-                                                    sim.Stores[consIter + localProducers.Count].Stock);
-                    }
-
-                    consIter++;
-                }
-
-
-                // Этап 6: Зарядка аккумуляторов    ----------------------------------------------------------------------------
-                cons = network.Accumulators.Count; // Количество аккумов в сети
-                consumer2Positions = new(cons); // Позиции потребителей
-                consumer2Requests = new(cons); // Запросы потребителей
-                localAccums.Clear();
-                foreach (var electricAccum in network.Accumulators)
-                {
-                    if (network.PartPositions.Contains(electricAccum.Pos)   // Проверяем, что аккумулятор находится в части сети
-                        && parts[electricAccum.Pos].IsLoaded)                // Проверяем, что аккумулятор загружен
-                                                                             // Проверяем, что аккумулятор может отдать энергию вообще
-                    {
-                        localAccums.Add(new Accumulator(electricAccum));
-                        requestedEnergy = electricAccum.canStore();
-                        consumer2Positions.Add(electricAccum.Pos);
-                        consumer2Requests.Add(requestedEnergy);
-                    }
-                }
-
-
-                
-
-
-                // Этап 7: Остатки генераторов  ----------------------------------------------------------------------------
-                prod = localProducers.Count; // Количество производителей в сети
-                int prodIter = 0; // Итератор для производителей
-                producer2Positions = new(prod); // Позиции производителей
-                producer2Give = new(prod); // Энергия, которую отдают производители
-
-                foreach (var producer in localProducers)
-                {
-                    giveEnergy = sim.Stores[prodIter].Stock;
-                    producer2Positions.Add(producer.ElectricProducer.Pos);
-                    producer2Give.Add(giveEnergy);
-                    prodIter++;
-                }
-
-
-                // Этап 8: Распределение энергии для аккумуляторов ----------------------------------------------------------------------------
-                logisticalTask(network, consumer2Positions, consumer2Requests, producer2Positions, producer2Give, sim2);
-
-                if (!instant) // Медленная передача
-                {
-                    BlockPos posStore; // Позиция магазина в мире
-                    BlockPos posCustomer; // Позиция потребителя в мире
-                    int customCount = sim2.Customers.Count; // Количество клиентов в симуляции 2
-                    int storeCount = sim2.Stores.Count; // Количество магазинов в симуляции 2
-
-                    for (int i = 0; i < customCount; i++)
-                    {
-                        for (int k = 0; k < storeCount; k++)
-                        {
-                            var value = sim2.Customers[i].Received[sim2.Stores[k].Id];
-                            if (value > 0)
-                            {
-                                posStore = producer2Positions[k];
-                                posCustomer = consumer2Positions[i];
-
-                                if (PathCacheManager.TryGet(posCustomer, posStore, network.version, out var path,
-                                        out var facing, out var processed, out var usedConn))
-                                {
-                                    // Проверяем, что пути и направления не равны null
-                                    if (path == null ||
-                                        facing == null ||
-                                        processed == null ||
-                                        usedConn == null)
-                                        continue;
-
-                                    // создаём пакет, не копируя ничего
-                                    var packet = new EnergyPacket(
-                                        value,
-                                        parts[posStore].eparams[facing.Last()].voltage,
-                                        path.Length - 1,
-                                        path,
-                                        facing,
-                                        processed,
-                                        usedConn
-                                    );
-
-
-                                    // Добавляем пакет в глобальный список
-                                    localPackets.Add(packet);
-                                }
-
-                            }
-                        }
-                    }
-                }
-
-
-
-                int j = 0;
-                if (instant) // Мгновенная передача
-                {
-                    float totalGive;
-                    foreach (var accum in localAccums)
-                    {
-                        totalGive = sim2.Customers[j].Required - sim2.Customers[j].Remaining;
-                        accum.ElectricAccum.Store(totalGive);
-                        j++;
-                    }
-                }
-
-                // Этап 9: Сообщение генераторам о нагрузке ----------------------------------------------------------------------------
-                j = 0;
-                foreach (var producer in localProducers)
-                {
-                    var totalOrder = sim.Stores[j].totalRequest + sim2.Stores[j].totalRequest;
-                    producer.ElectricProducer.Produce_order(totalOrder);
-                    j++;
-                }
-
-                
 
                 // добаляем одним разом, чтобы не было лишних операций
                 globalEnergyPackets.AddRange(localPackets);
-                
-                
+
+
             }
 
 
@@ -847,356 +819,361 @@ namespace ElectricalProgressive
 
 
 
-            if (!instant) // Если не мгновенная передача, то продолжаем обработку пакетов
+
+            // Этап 11: Потребление энергии пакетами и Этап 12: Перемещение пакетов-----------------------------------------------
+
+            BlockPos pos;                   // Временная переменная для позиции
+            float resistance, current, lossEnergy;  // Переменные для расчета сопротивления, тока и потерь энергии                    
+            int curIndex, currentFacingFrom;        // текущий индекс и направление в пакете
+            BlockPos currentPos, nextPos;           // текущая и следующая позиции в пути пакета
+            NetworkPart nextPart, currentPart;      // Временные переменные для частей сети
+            
+
+            //sumEnergy.Clear();
+            foreach (var part2 in parts)  //перебираем все элементы
             {
-                // Этап 11: Потребление энергии пакетами и Этап 12: Перемещение пакетов-----------------------------------------------
-
-                BlockPos pos;                   // Временная переменная для позиции
-                float resistance, current, lossEnergy;  // Переменные для расчета сопротивления, тока и потерь энергии                    
-                int curIndex, currentFacingFrom;        // текущий индекс и направление в пакете
-                BlockPos currentPos, nextPos;           // текущая и следующая позиции в пути пакета
-                NetworkPart nextPart, currentPart;      // Временные переменные для частей сети
-                EnergyPacket packet;                    // Временная переменная для пакета энергии
-
-                //sumEnergy.Clear();
-                foreach (var part2 in parts)  //перебираем все элементы
+                //заполняем нулями
+                if (!sumEnergy.TryGetValue(part2.Key, out _))
                 {
-                    //заполняем нулями
-                    if (!sumEnergy.TryGetValue(part2.Key, out _))
-                    {
-                        sumEnergy.Add(part2.Key, 0F);
-                    }
-                    else
-                    {
-                        sumEnergy[part2.Key] = 0F;
-                    }
-
-                    part2.Value.current.Fill(0f);           //обнуляем токи
+                    sumEnergy.Add(part2.Key, 0F);
+                }
+                else
+                {
+                    sumEnergy[part2.Key] = 0F;
                 }
 
+                part2.Value.eparams[0].current = 0f;       //обнуляем токи
+                part2.Value.eparams[1].current = 0f;       //обнуляем токи
+                part2.Value.eparams[2].current = 0f;       //обнуляем токи
+                part2.Value.eparams[3].current = 0f;       //обнуляем токи
+                part2.Value.eparams[4].current = 0f;       //обнуляем токи
+                part2.Value.eparams[5].current = 0f;       //обнуляем токи
+            }
 
 
-                for (int i = globalEnergyPackets.Count - 1; i >= 0; i--)
+
+            for (int i = globalEnergyPackets.Count - 1; i >= 0; i--)
+            {
+                var packet = globalEnergyPackets[i];
+                curIndex = packet.currentIndex; //текущий индекс в пакете
+
+                if (curIndex == 0)
                 {
-                    packet = globalEnergyPackets[i];
-                    curIndex = packet.currentIndex; //текущий индекс в пакете
+                    pos = packet.path[0];
 
-                    if (curIndex == 0)
+                    if (parts.TryGetValue(pos, out var part2))
                     {
-                        pos = packet.path[0];
-
-                        if (parts.TryGetValue(pos, out var part2))
+                        bool isValid = false;
+                        // Ручная проверка условий 
+                        foreach (var s in part2.eparams)
                         {
-                            bool isValid = false;
-                            // Ручная проверка условий 
-                            foreach (var s in part2.eparams)
+                            if (s.voltage > 0 && !s.burnout && packet.voltage >= s.voltage)
                             {
-                                if (s.voltage > 0 && !s.burnout && packet.voltage >= s.voltage)
-                                {
-                                    isValid = true;
-                                    break;
-                                }
-                            }
-
-                            if (isValid)
-                            {
-                                if (sumEnergy.TryGetValue(pos, out _))
-                                {
-                                    sumEnergy[pos] += packet.energy;
-                                }
-                                else
-                                {
-                                    sumEnergy.Add(pos, packet.energy);
-                                }
-                            }
-                        }
-
-                        globalEnergyPackets[i].shouldBeRemoved = true;
-                    }
-                    else
-                    {
-
-                        currentPos = packet.path[curIndex];
-                        nextPos = packet.path[curIndex - 1];
-                        currentFacingFrom = packet.facingFrom[curIndex];
-
-                        if (parts.TryGetValue(nextPos, out nextPart!) &&
-                            parts.TryGetValue(currentPos, out currentPart!))
-                        {
-                            if (!nextPart.eparams[packet.facingFrom[curIndex - 1]]
-                                    .burnout) //проверяем не сгорела ли грань в след блоке
-                            {
-
-                                if ((nextPart.Connection & packet.usedConnections[curIndex - 1]) ==
-                                    packet.usedConnections
-                                        [curIndex - 1]) // проверяем совпадает ли путь в пакете с путем в части сети
-
-                                {
-                                    // считаем сопротивление
-                                    resistance = currentPart.eparams[currentFacingFrom].resistivity /
-                                                 (currentPart.eparams[currentFacingFrom].lines *
-                                                  currentPart.eparams[currentFacingFrom].crossArea);
-
-                                    // Провод в изоляции теряет меньше энергии
-                                    if (currentPart.eparams[currentFacingFrom].isolated)
-                                        resistance /= 2.0f;
-
-                                    // считаем ток по закону Ома
-                                    current = packet.energy / packet.voltage;
-
-                                    // считаем потерю энергии по закону Джоуля
-                                    lossEnergy = current * current * resistance;
-                                    packet.energy = Math.Max(packet.energy - lossEnergy, 0);
-
-                                    // пересчитаем ток уже с учетом потерь
-                                    current = packet.energy / packet.voltage;
-
-
-                                    packet.currentIndex--;
-
-                                    // далее учитываем правило алгебраического сложения встречных токов
-                                    // 1) Определяем вектор движения
-                                    var delta = nextPos.SubCopy(currentPos);
-                                    bool sign = true;
-
-                                    if (delta.X < 0) sign = !sign;
-                                    if (delta.Y < 0) sign = !sign;
-                                    if (delta.Z < 0) sign = !sign;
-
-                                    // 2) Прописываем токи на нужные грани
-                                    int j = 0;
-                                    foreach (var face in packet.nowProcessedFaces[packet.currentIndex])
-                                    {
-                                        if (face)
-                                        {
-                                            if (sign)
-                                                nextPart.current[j] += current; // добавляем ток в следующую часть сети
-                                            else
-                                                nextPart.current[j] -= current; // добавляем ток в следующую часть сети
-                                        }
-
-                                        j++;
-                                    }
-
-                                    // 3) Если энергия пакета почти нулевая — удаляем пакет
-                                    if (packet.energy <= 0.001f)
-                                    {
-                                        globalEnergyPackets[i].shouldBeRemoved = true;
-                                    }
-
-
-                                }
-                                else
-                                {
-                                    // если все же путь не совпадает с путем в пакете, то чистим кэши
-                                    PathCacheManager.RemoveAll(packet.path[0], packet.path.Last());
-
-                                    globalEnergyPackets[i].shouldBeRemoved = true;
-
-                                }
-                            }
-                            else
-                            {
-                                globalEnergyPackets[i].shouldBeRemoved = true;
-                            }
-                        }
-                        else
-                        {
-                            // если все же части сети не найдены, то тут точно кэш надо утилизировать
-                            PathCacheManager.RemoveAll(packet.path[0], packet.path.Last());
-
-                            globalEnergyPackets[i].shouldBeRemoved = true;
-                        }
-                    }
-                }
-
-
-                //Удаление ненужных пакетов
-                globalEnergyPackets.RemoveAll(p => p.shouldBeRemoved);
-
-
-                foreach (var pair in sumEnergy)
-                {
-                    if (parts.TryGetValue(pair.Key, out var parta))
-                    {
-                        if (parta.Consumer != null)
-                            parta.Consumer!.Consume_receive(pair.Value);
-                        else if (parta.Accumulator != null)
-                            parta.Accumulator!.Store(pair.Value);
-                    }
-                    else
-                    {
-                        sumEnergy.Remove(pair.Key); // Удаляем, если части сети этой уже нет
-                    }
-                }
-
-
-
-
-                // Этап 13: Проверка сгорания проводов и трансформаторов ----------------------------------------------------------------------------
-
-
-
-                // подчищаем словарь, но не в ноль
-                foreach (var list in packetsByPosition.Values)
-                {
-                    list.Clear();
-                }
-
-                // Создаем словарь для хранения пакетов по позициям
-                foreach (var packet2 in globalEnergyPackets)
-                {
-                    if (!packet2.shouldBeRemoved) // Проверяем, что пакет не помечен для удаления
-                    {
-                        pos = packet2.path[packet2.currentIndex];
-                        if (!packetsByPosition.TryGetValue(pos, out var list))
-                        {
-                            list = new List<EnergyPacket>();
-                            packetsByPosition[pos] = list;
-                        }
-
-                        list.Add(packet2);
-                    }
-                }
-
-
-
-                var bAccessor = api.World.BlockAccessor; //аксессор для блоков
-                BlockPos partPos;                        // Временная переменная для позиции части сети
-                NetworkPart part;                        // Временная переменная для части сети
-                bool updated;                            // Флаг обновления части сети от повреждения
-                EParams faceParams;                      // Параметры грани сети
-                int lastFaceIndex;                       // Индекс последней грани в пакете
-                float totalEnergy;                       // Суммарная энергия в трансформаторе
-                float totalCurrent;                      // Суммарный ток в трансформаторе
-                int k = 0;
-
-                foreach (var partEntry in parts)
-                {
-                    partPos = partEntry.Key;
-                    part = partEntry.Value;
-
-                    //обновляем каждый блок сети
-                    updated = k % 20 == envUpdater &&
-                              part.IsLoaded &&          // блок загружен?
-                              damageManager!.DamageByEnvironment(this.sapi, ref part, ref bAccessor);
-                    k++;
-
-
-                    if (updated)
-                    {
-                        for (int faceIndex = 0; faceIndex < 6; faceIndex++)
-                        {
-                            faceParams = part.eparams[faceIndex];
-                            if (faceParams.voltage == 0 || !faceParams.burnout)
-                                continue;
-
-                            ResetComponents(ref part); // сброс компонентов сети
-                        }
-
-                    }
-
-
-                    // Обрабатываем пакеты в этой части сети
-                    if (packetsByPosition.TryGetValue(partPos, out var packets))
-                    {
-                        var bufPartTrans = part.Transformator;
-                        // Обработка трансформаторов
-                        if (bufPartTrans != null)
-                        {
-                            totalEnergy = 0f;
-                            totalCurrent = 0f;
-
-                            foreach (var packet2 in packets)
-                            {
-
-                                totalEnergy += packet2.energy;
-                                totalCurrent += packet2.energy / packet2.voltage;
-
-
-                                if (packet2.voltage == bufPartTrans.highVoltage)
-                                    packet2.voltage = bufPartTrans.lowVoltage;
-                                else if (packet2.voltage == bufPartTrans.lowVoltage)
-                                    packet2.voltage = bufPartTrans.highVoltage;
-
-                            }
-
-
-                            int transformatorFaceIndex =
-                                FacingHelper.GetFaceIndex(
-                                    FacingHelper.FromFace(FacingHelper.Faces(part.Connection)
-                                        .First())); // Индекс грани трансформатора!
-
-                            part.current[transformatorFaceIndex] = totalCurrent;
-
-                            bufPartTrans.setPower(totalEnergy);
-                            bufPartTrans.Update();
-                        }
-
-
-                        // Проверка на превышение напряжения
-                        foreach (var packet2 in packets)
-                        {
-                            lastFaceIndex = packet2.facingFrom[packet2.currentIndex];
-
-                            faceParams = part.eparams[lastFaceIndex];
-                            if (faceParams.voltage != 0 && packet2.voltage > faceParams.voltage)
-                            {
-                                part.eparams[lastFaceIndex].prepareForBurnout(2);
-
-                                if (packet2.path[packet2.currentIndex] == partPos)
-                                    packet2.shouldBeRemoved = true;
-
-
-                                ResetComponents(ref part);
+                                isValid = true;
                                 break;
                             }
                         }
 
+                        if (isValid)
+                        {
+                            if (sumEnergy.TryGetValue(pos, out _))
+                            {
+                                sumEnergy[pos] += packet.energy;
+                            }
+                            else
+                            {
+                                sumEnergy.Add(pos, packet.energy);
+                            }
+                        }
+                    }
+
+                    globalEnergyPackets[i].shouldBeRemoved = true;
+                }
+                else
+                {
+
+                    currentPos = packet.path[curIndex];
+                    nextPos = packet.path[curIndex - 1];
+                    currentFacingFrom = packet.facingFrom[curIndex];
+
+                    if (parts.TryGetValue(nextPos, out nextPart!) &&
+                        parts.TryGetValue(currentPos, out currentPart!))
+                    {
+                        if (!nextPart.eparams[packet.facingFrom[curIndex - 1]]
+                                .burnout) //проверяем не сгорела ли грань в след блоке
+                        {
+
+                            if ((nextPart.Connection & packet.usedConnections[curIndex - 1]) ==
+                                packet.usedConnections
+                                    [curIndex - 1]) // проверяем совпадает ли путь в пакете с путем в части сети
+
+                            {
+                                // считаем сопротивление
+                                resistance = currentPart.eparams[currentFacingFrom].resistivity /
+                                             (currentPart.eparams[currentFacingFrom].lines *
+                                              currentPart.eparams[currentFacingFrom].crossArea);
+
+                                // Провод в изоляции теряет меньше энергии
+                                if (currentPart.eparams[currentFacingFrom].isolated)
+                                    resistance /= 2.0f;
+
+                                // считаем ток по закону Ома
+                                current = packet.energy / packet.voltage;
+
+                                // считаем потерю энергии по закону Джоуля
+                                lossEnergy = current * current * resistance;
+                                packet.energy = Math.Max(packet.energy - lossEnergy, 0);
+
+                                // пересчитаем ток уже с учетом потерь
+                                current = packet.energy / packet.voltage;
+
+
+                                packet.currentIndex--;
+
+                                // далее учитываем правило алгебраического сложения встречных токов
+                                // 1) Определяем вектор движения
+                                var delta = nextPos.SubCopy(currentPos);
+                                bool sign = true;
+
+                                if (delta.X < 0) sign = !sign;
+                                if (delta.Y < 0) sign = !sign;
+                                if (delta.Z < 0) sign = !sign;
+
+                                // 2) Прописываем токи на нужные грани
+                                int j = 0;
+                                foreach (var face in packet.nowProcessedFaces[packet.currentIndex])
+                                {
+                                    if (face)
+                                    {
+                                        if (sign)
+                                            nextPart.eparams[j].current += current; // добавляем ток в следующую часть сети
+                                        else
+                                            nextPart.eparams[j].current -= current; // добавляем ток в следующую часть сети
+                                    }
+
+                                    j++;
+                                }
+
+                                // 3) Если энергия пакета почти нулевая — удаляем пакет
+                                if (packet.energy <= 0.001f)
+                                {
+                                    globalEnergyPackets[i].shouldBeRemoved = true;
+                                }
+
+
+                            }
+                            else
+                            {
+                                // если все же путь не совпадает с путем в пакете, то чистим кэши
+                                PathCacheManager.RemoveAll(packet.path[0], packet.path.Last(), packet.networkVersion);
+
+                                globalEnergyPackets[i].shouldBeRemoved = true;
+
+                            }
+                        }
+                        else
+                        {
+                            PathCacheManager.RemoveAll(packet.path[0], packet.path.Last(), packet.networkVersion);
+
+                            globalEnergyPackets[i].shouldBeRemoved = true;
+                        }
                     }
                     else
                     {
-                        //packetsByPosition.Remove(partPos); // Удаляем, если части сети этой уже нет
+                        // если все же части сети не найдены, то тут точно кэш надо утилизировать
+                        PathCacheManager.RemoveAll(packet.path[0], packet.path.Last(), packet.networkVersion);
+
+                        globalEnergyPackets[i].shouldBeRemoved = true;
+                    }
+                }
+            }
+
+
+            //Удаление ненужных пакетов
+            globalEnergyPackets.RemoveAll(p => p.shouldBeRemoved);
+
+
+            foreach (var pair in sumEnergy)
+            {
+                if (parts.TryGetValue(pair.Key, out var parta))
+                {
+                    if (parta.Consumer != null)
+                        parta.Consumer!.Consume_receive(pair.Value);
+                    else if (parta.Accumulator != null)
+                        parta.Accumulator!.Store(pair.Value);
+                }
+                else
+                {
+                    sumEnergy.Remove(pair.Key); // Удаляем, если части сети этой уже нет
+                }
+            }
+
+
+
+
+            // Этап 13: Проверка сгорания проводов и трансформаторов ----------------------------------------------------------------------------
+
+
+
+            // подчищаем словарь, но не в ноль
+            foreach (var list in packetsByPosition.Values)
+            {
+                list.Clear();
+            }
+
+            // Создаем словарь для хранения пакетов по позициям
+            foreach (var packet2 in globalEnergyPackets)
+            {
+                if (!packet2.shouldBeRemoved) // Проверяем, что пакет не помечен для удаления
+                {
+                    pos = packet2.path[packet2.currentIndex];
+                    if (!packetsByPosition.TryGetValue(pos, out var list))
+                    {
+                        list = new List<EnergyPacket>();
+                        packetsByPosition[pos] = list;
                     }
 
-                    // Проверка на превышение тока
+                    list.Add(packet2);
+                }
+            }
+
+
+
+            var bAccessor = api.World.BlockAccessor; // аксессор для блоков
+            BlockPos partPos;                        // Временная переменная для позиции части сети
+            NetworkPart part;                        // Временная переменная для части сети
+            bool updated;                            // Флаг обновления части сети от повреждения
+            EParams faceParams;                      // Параметры грани сети
+            int lastFaceIndex;                       // Индекс последней грани в пакете
+            float totalEnergy;                       // Суммарная энергия в трансформаторе
+            float totalCurrent;                      // Суммарный ток в трансформаторе
+            int kons = 0;
+
+            foreach (var partEntry in parts)
+            {
+                partPos = partEntry.Key;
+                part = partEntry.Value;
+
+                //обновляем каждый блок сети
+                updated = kons % 20 == envUpdater &&
+                          part.IsLoaded &&          // блок загружен?
+                          damageManager!.DamageByEnvironment(this.sapi, ref part, ref bAccessor);
+                kons++;
+
+
+                if (updated)
+                {
                     for (int faceIndex = 0; faceIndex < 6; faceIndex++)
                     {
-
                         faceParams = part.eparams[faceIndex];
-                        if (faceParams.voltage == 0 ||
-                            part.current[faceIndex] <= faceParams.maxCurrent * faceParams.lines)
+                        if (faceParams.voltage == 0 || !faceParams.burnout)
                             continue;
 
-                        part.eparams[faceIndex].prepareForBurnout(1);
-
-
-                        foreach (var p in globalEnergyPackets)
-                        {
-                            if (p.path[p.currentIndex] == partPos &&
-                                p.nowProcessedFaces.LastOrDefault()?[faceIndex] == true)
-                            {
-                                p.shouldBeRemoved = true;
-                            }
-                        }
-
-                        ResetComponents(ref part);
+                        ResetComponents(ref part); // сброс компонентов сети
                     }
+
                 }
 
 
-                envUpdater++;
-                if (envUpdater > 19)
-                    envUpdater = 0;
+                // Обрабатываем пакеты в этой части сети
+                if (packetsByPosition.TryGetValue(partPos, out var packets))
+                {
+                    var bufPartTrans = part.Transformator;
+                    // Обработка трансформаторов
+                    if (bufPartTrans != null)
+                    {
+                        totalEnergy = 0f;
+                        totalCurrent = 0f;
+
+                        foreach (var packet2 in packets)
+                        {
+
+                            totalEnergy += packet2.energy;
+                            totalCurrent += packet2.energy / packet2.voltage;
+
+
+                            if (packet2.voltage == bufPartTrans.highVoltage)
+                                packet2.voltage = bufPartTrans.lowVoltage;
+                            else if (packet2.voltage == bufPartTrans.lowVoltage)
+                                packet2.voltage = bufPartTrans.highVoltage;
+
+                        }
+
+
+                        int transformatorFaceIndex =
+                            FacingHelper.GetFaceIndex(
+                                FacingHelper.FromFace(FacingHelper.Faces(part.Connection)
+                                    .First())); // Индекс грани трансформатора!
+
+                        part.eparams[transformatorFaceIndex].current = totalCurrent;
+
+                        bufPartTrans.setPower(totalEnergy);
+
+                        //bufPartTrans.Update();
+                    }
+
+
+                    // Проверка на превышение напряжения
+                    foreach (var packet2 in packets)
+                    {
+                        lastFaceIndex = packet2.facingFrom[packet2.currentIndex];
+
+                        faceParams = part.eparams[lastFaceIndex];
+                        if (faceParams.voltage != 0 && packet2.voltage > faceParams.voltage)
+                        {
+                            part.eparams[lastFaceIndex].prepareForBurnout(2);
+
+                            if (packet2.path[packet2.currentIndex] == partPos)
+                                packet2.shouldBeRemoved = true;
+
+
+                            ResetComponents(ref part);
+                            break;
+                        }
+                    }
+
+                }
 
 
 
-                //Удаление ненужных пакетов
-                globalEnergyPackets.RemoveAll(p => p.shouldBeRemoved);
+                // Проверка на превышение тока
+                for (int faceIndex = 0; faceIndex < 6; faceIndex++)
+                {
+
+                    faceParams = part.eparams[faceIndex];
+                    if (faceParams.voltage == 0 ||
+                        Math.Abs(faceParams.current) <= faceParams.maxCurrent * faceParams.lines)
+                        continue;
+
+                    part.eparams[faceIndex].prepareForBurnout(1);
 
 
+                    foreach (var p in globalEnergyPackets)
+                    {
+                        if (p.path[p.currentIndex] == partPos &&
+                            p.nowProcessedFaces.LastOrDefault()?[faceIndex] == true)
+                        {
+                            p.shouldBeRemoved = true;
+                        }
+                    }
 
+                    ResetComponents(ref part);
+                }
             }
+
+
+            envUpdater++;
+            if (envUpdater > 19)
+                envUpdater = 0;
+
+
+
+            //Удаление ненужных пакетов
+            globalEnergyPackets.RemoveAll(p => p.shouldBeRemoved);
+
+
+
+
 
 
         }
@@ -1680,7 +1657,7 @@ namespace ElectricalProgressive
 
 
 
-
+        
 
         /// <summary>
         /// Cобирает информацию по цепи
@@ -1695,8 +1672,6 @@ namespace ElectricalProgressive
 
             if (this.parts.TryGetValue(position, out var part))
             {
-
-
                 if (method == "thisFace" || method == "firstFace") // пока так, возможно потом по-разному будет обработка
                 {
                     var blockFacing = FacingHelper.Faces(facing).First();
@@ -1706,7 +1681,7 @@ namespace ElectricalProgressive
                         localNetwork = net;                                              //выдаем найденную цепь
                         result.Facing |= FacingHelper.FromFace(blockFacing);        //выдаем ее направления
                         result.eParamsInNetwork = part.eparams[blockFacing.Index];  //выдаем ее текущие параметры
-                        result.current = part.current[blockFacing.Index];           //выдаем текущий ток в этой грани
+                        result.current = part.eparams[blockFacing.Index].current;           //выдаем текущий ток в этой грани
                     }
                     else
                         return result;
@@ -1718,7 +1693,8 @@ namespace ElectricalProgressive
 
                     foreach (var blockFacing2 in FacingHelper.Faces(facing))
                     {
-                        if (part.Networks[blockFacing2.Index]is not null && part.current[blockFacing2.Index] > 0.0F)
+                        if (part.Networks[blockFacing2.Index] is not null &&
+                            Math.Abs(part.eparams[blockFacing2.Index].current) > 0.0F)
                         {
                             blockFacing = blockFacing2;
                             searchIndex = blockFacing2.Index;
@@ -1730,7 +1706,7 @@ namespace ElectricalProgressive
                         localNetwork = net;                                              //выдаем найденную цепь
                         result.Facing |= FacingHelper.FromFace(blockFacing);        //выдаем ее направления
                         result.eParamsInNetwork = part.eparams[searchIndex];  //выдаем ее текущие параметры
-                        result.current = part.current[searchIndex];           //выдаем текущий ток в этой грани
+                        result.current = part.eparams[searchIndex].current;           //выдаем текущий ток в этой грани
                     }
                     else
                         return result;
@@ -1818,9 +1794,8 @@ namespace ElectricalProgressive
     public class ElectricityConfig
     {
         public int speedOfElectricity = 4;
-        public bool instant = false;
         public int timeBeforeBurnout = 30;
-        public bool multiThreading = true;
+        public int multiThreading = 4;
     }
 
     /// <summary>

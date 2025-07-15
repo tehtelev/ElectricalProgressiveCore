@@ -1,4 +1,5 @@
-﻿using Vintagestory.API.MathTools;
+﻿using System;
+using Vintagestory.API.MathTools;
 
 namespace ElectricalProgressive.Utils
 {
@@ -16,6 +17,11 @@ namespace ElectricalProgressive.Utils
         /// Напряжение, с которым движется энергия.
         /// </summary>
         public int voltage;
+
+        /// <summary>
+        /// Версия сети, в которой был создан пакет.
+        /// </summary>
+        public int networkVersion;
 
         /// <summary>
         /// Текущий индекс в пути, где сейчас пакет
@@ -60,7 +66,8 @@ namespace ElectricalProgressive.Utils
             BlockPos[] Path,
             int[] FacingFrom,
             bool[][] NowProcessedFaces,
-            Facing[] UsedConnections
+            Facing[] UsedConnections,
+            int NetworkVersion
         )
         {
             energy = Energy;
@@ -71,6 +78,7 @@ namespace ElectricalProgressive.Utils
             nowProcessedFaces = NowProcessedFaces;
             usedConnections = UsedConnections;
             shouldBeRemoved = false;
+            networkVersion = NetworkVersion;
         }
 
 

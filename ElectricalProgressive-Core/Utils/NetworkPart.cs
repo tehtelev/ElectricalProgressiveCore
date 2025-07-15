@@ -10,7 +10,6 @@ namespace ElectricalProgressive.Utils
     {
         public readonly Network?[] Networks = new Network?[6];
         public EParams[] eparams = new EParams[] { };
-        public float[] current = new float[6];
         public readonly BlockPos Position;
         public Facing Connection = Facing.None;
         public IElectricAccumulator? Accumulator;

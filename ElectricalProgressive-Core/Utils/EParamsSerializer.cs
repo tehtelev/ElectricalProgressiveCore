@@ -24,9 +24,10 @@ namespace ElectricalProgressive.Utils
                         writer.Write(eparam.crossArea);          // float, 4 байта
                         writer.Write(eparam.burnout);            // bool, 1 байт
                         writer.Write(eparam.isolated);           // bool, 1 байт
-                        writer.Write(eparam.isolatedEnvironment); // bool, 1 байт
+                        writer.Write(eparam.isolatedEnvironment);// bool, 1 байт
                         writer.Write(eparam.causeBurnout);       // byte, 1 байт
                         writer.Write(eparam.ticksBeforeBurnout); // int, 4 байта
+                        writer.Write(eparam.current);            // float, 4 байта
                     }
                 }
                 return ms.ToArray();
@@ -56,7 +57,8 @@ namespace ElectricalProgressive.Utils
                             isolated = reader.ReadBoolean(),
                             isolatedEnvironment = reader.ReadBoolean(),
                             causeBurnout = reader.ReadByte(),
-                            ticksBeforeBurnout = reader.ReadInt32()
+                            ticksBeforeBurnout = reader.ReadInt32(),
+                            current = reader.ReadSingle()
                         };
                     }
                     return eparamsArray;

@@ -32,7 +32,7 @@ namespace ElectricalProgressive.Utils
 
         // шаблон «чёрного дыма»
         private static readonly SimpleParticleProperties SmokeTemplate = new(
-            minQuantity: 1, maxQuantity: 1,
+            minQuantity: 2, maxQuantity: 2,
             color: ColorUtil.ColorFromRgba(50, 50, 50, 200),
             minPos: new Vec3d(), maxPos: new Vec3d(0.8, 0.1, 0.8),
             minVelocity: new Vec3f(-0.1f, -0.1f, -0.1f), maxVelocity: new Vec3f(0.1f, 0.1f, 0.1f)
@@ -67,7 +67,7 @@ namespace ElectricalProgressive.Utils
 
         // шаблон «белого дыма» подготовки сгореть
         private static readonly SimpleParticleProperties WhiteSlowSmokeTemplate = new(
-            minQuantity: 1, maxQuantity: 1,
+            minQuantity: 2, maxQuantity: 2,
             color: ColorUtil.ColorFromRgba(210, 210, 210, 200),
             minPos: new Vec3d(), maxPos: new Vec3d(0.8, 0.1, 0.8),
             minVelocity: new Vec3f(-0.1f, -0.1f, -0.1f), maxVelocity: new Vec3f(0.1f, 0.1f, 0.1f)

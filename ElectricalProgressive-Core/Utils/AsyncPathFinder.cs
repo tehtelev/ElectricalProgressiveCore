@@ -17,6 +17,7 @@ namespace ElectricalProgressive.Utils
         private bool busy = false;                                          // Флаг для отслеживания загрузки очереди
         private readonly int maxConcurrentTasks;                            // Максимальное количество параллельных задач
         private Dictionary<BlockPos, NetworkPart> parts;                    // Словарь частей сети
+        private int sizeOfQueue;
 
 
         /// <summary>
@@ -28,7 +29,7 @@ namespace ElectricalProgressive.Utils
         {
             this.parts= parts;
             this.maxConcurrentTasks = maxConcurrentTasks;
-
+            this.sizeOfQueue = 500* maxConcurrentTasks;
             // Запускаем задачи-потребители один раз при старте
             for (int i = 0; i < maxConcurrentTasks; i++)
             {
@@ -51,8 +52,8 @@ namespace ElectricalProgressive.Utils
             if (requestQueue.Count < 100)
                 busy = false;
 
-            // если очередь меньше 1000 и не занята, то добавляем запрос
-            if (requestQueue.Count < 1000 && !busy)
+            // если очередь меньше sizeOfQueue и не занята, то добавляем запрос
+            if (requestQueue.Count < sizeOfQueue && !busy)
             {
                 requestQueue.Enqueue(new PathRequest(start, end, network));
             }
@@ -65,9 +66,9 @@ namespace ElectricalProgressive.Utils
         /// <summary>
         /// Обработка очереди запросов
         /// </summary>
-        public void ProcessRequests()
+        private void ProcessRequests()
         {
-            PathFinder pathFinder = new PathFinder(); // Создаем новый экземпляр PathFinder для каждого потока
+            var pathFinder = new PathFinder(); // Создаем новый экземпляр PathFinder для каждого потока
 
             // Цикл обработки запросов
             while (isRunning)
@@ -76,9 +77,9 @@ namespace ElectricalProgressive.Utils
                 if (requestQueue.Count == 0) 
                 {
                     pathFinder.Clear();
-                    Thread.Sleep(222); // Если очередь пуста, ждем 200 мс
+                    Thread.Sleep(100); // Если очередь пуста, ждем 100 мс
                 }
-
+                
                 // Пытаемся извлечь запрос из очереди
                 if (requestQueue.TryDequeue(out var request))
                 {
@@ -88,8 +89,10 @@ namespace ElectricalProgressive.Utils
                                 pathFinder.FindShortestPath(request.Start, request.End, request.Network, parts);
 
                             if (path != null) // проверка на null, чтобы потом снова посчитать попробовать
-                                PathCacheManager.AddOrUpdate(request.Start, request.End, request.Network.version, path,
-                                    facing, processed, usedConn);
+                                PathCacheManager.AddOrUpdate(
+                                    request.Start,
+                                    request.End,
+                                    request.Network.version, path, facing, processed, usedConn);
 
                     }
                     catch
@@ -99,6 +102,7 @@ namespace ElectricalProgressive.Utils
 
 
                 }
+
 
             }
         }

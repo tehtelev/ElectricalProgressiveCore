@@ -10,6 +10,7 @@ using Vintagestory.API.Common;
 namespace ElectricalProgressive.Utils;
 public static class ParallelHelper
 {
+    /*
     /// <summary>
     /// Для Windows — половина логических ядер (min 1), 
     /// для Linux/macOS — число физических ядер, или fallback в логические.
@@ -87,4 +88,5 @@ public static class ParallelHelper
 
         Parallel.ForEach(workItemsEnumerable, po, action);
     }
+    */
 }
