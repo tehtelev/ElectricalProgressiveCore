@@ -22,7 +22,7 @@ namespace ElectricalProgressive.Utils
         }
 
         // TTL, по истечении которого неиспользуемые записи удаляются
-        private static readonly TimeSpan EntryTtl = TimeSpan.FromMinutes(2);
+        private static readonly TimeSpan EntryTtl = TimeSpan.FromMinutes(ElectricalProgressive.cacheTimeoutCleanupMinutes);
 
         // Сам кэш, ключом служит только (start, end, version)
         private static readonly ConcurrentDictionary<(BlockPos, BlockPos, int), Entry> cache = new();
@@ -55,6 +55,8 @@ namespace ElectricalProgressive.Utils
             return false;
         }
 
+
+        
         /// <summary>
         /// Сохранить в кэше новый вычисленный путь (или обновить существующий).
         /// </summary>
@@ -86,6 +88,8 @@ namespace ElectricalProgressive.Utils
                     return existing;
                 });
         }
+
+
 
         /// <summary>
         /// Удалить все записи, к которым не обращались в течение TTL.

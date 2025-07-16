@@ -218,34 +218,70 @@ public class PathFinder
 
 
         // Если путь не найден, возвращаем null
-        if (path == null)
+        if (path == null !| start!=path[0] || end!=path.Last())
             return (null!, null!, null!, null!);
 
-        int pathLength = path.Length;
-        var nowProcessingFaces = new Facing[pathLength];
-        var nowProcessedFacesList = new bool[pathLength][];
-        var facingFromList = new int[pathLength];
+        Facing[] nowProcessingFaces = null!;      //храним тут Facing граней, которые сейчас в работе                                           
+        bool[][] nowProcessedFacesList = null!; //хранит для каждого кусочка цепи посещенные грани в данный момент (для вывода наружу)                                                
+        int[] facingFromList = null!;            //хранит номер задействованной грани соседа (для вывода наружу)
 
-        // Заполняем массивы с информацией о гранях и состоянии
-        for (int i = 0; i < pathLength; i++)
+
+        // ниже можно код сделать компактнее, но потом
+
+        bool[] npf;
+        Facing facing;
+        int pathLength = path.Count(); //длина пути
+        nowProcessingFaces = new Facing[pathLength];
+        nowProcessedFacesList = new bool[pathLength][];
+        facingFromList = new int[pathLength];
+
+        facingFromList[0] = facingFrom[(path[0], faces[0])];
+
+        for (int i = 1; i < pathLength; i++)                                //подготавливаем дополнительные данные
         {
-            var state = (path[i], faces[i]);
-            facingFromList[i] = facingFrom[state];
-            nowProcessedFacesList[i] = nowProcessedFaces.ContainsKey(state)
-                ? nowProcessedFaces[state]
-                : new bool[6];
+            facingFromList[i] = facingFrom[(path[i], faces[i])];
+            // первый элемент не добавляем
 
-            var partConn = parts[path[i]].Connection;
-            Facing result = Facing.None;
-            var npf = nowProcessedFacesList[i];
-            if (npf[0]) result |= partConn & Facing.NorthAll;
-            if (npf[1]) result |= partConn & Facing.EastAll;
-            if (npf[2]) result |= partConn & Facing.SouthAll;
-            if (npf[3]) result |= partConn & Facing.WestAll;
-            if (npf[4]) result |= partConn & Facing.UpAll;
-            if (npf[5]) result |= partConn & Facing.DownAll;
-            nowProcessingFaces[i] = result;
+            npf = nowProcessedFaces[(path[i], faces[i])];
+
+            nowProcessedFacesList[i - 1] = npf;
+
+            //фильтруем только нужные грани
+            facing = parts[path[i - 1]].Connection &
+                ((npf[0] ? Facing.NorthAll : Facing.None)
+                | (npf[1] ? Facing.EastAll : Facing.None)
+                | (npf[2] ? Facing.SouthAll : Facing.None)
+                | (npf[3] ? Facing.WestAll : Facing.None)
+                | (npf[4] ? Facing.UpAll : Facing.None)
+                | (npf[5] ? Facing.DownAll : Facing.None));
+
+            nowProcessingFaces[i - 1] = facing;
+
+
         }
+
+        // последний элемент
+
+        npf = new bool[6] { false, false, false, false, false, false };
+        npf[endBlockFacing[0]] = true; //маркер, что мы закончили этой гранью
+
+        nowProcessedFacesList[pathLength - 1] = npf;
+
+        //фильтруем только нужные грани
+        facing = parts[path[pathLength - 1]].Connection &
+            ((npf[0] ? Facing.NorthAll : Facing.None)
+            | (npf[1] ? Facing.EastAll : Facing.None)
+            | (npf[2] ? Facing.SouthAll : Facing.None)
+            | (npf[3] ? Facing.WestAll : Facing.None)
+            | (npf[4] ? Facing.UpAll : Facing.None)
+            | (npf[5] ? Facing.DownAll : Facing.None));
+
+        nowProcessingFaces[pathLength - 1] = facing;
+
+
+
+
+
 
 
         return (path, facingFromList, nowProcessedFacesList, nowProcessingFaces);
@@ -403,7 +439,7 @@ public class PathFinder
             foreach (var face in bufForFaces)
             {
                 neighborPosition = part.Position.AddCopy(face);
-                
+
                 if (parts.TryGetValue(neighborPosition, out neighborPart))
                 {
                     var oppFace = face.Opposite;

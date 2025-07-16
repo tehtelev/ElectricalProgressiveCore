@@ -22,7 +22,7 @@ using System.IO;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Electrical logic library.",
-    Version = "1.2.0",
+    Version = "2.0.0-rc.1",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
 
@@ -83,6 +83,8 @@ namespace ElectricalProgressive
         public static int speedOfElectricity; // Скорость электричества в проводах (блоков в тик)
         public static int timeBeforeBurnout; // Время до сгорания проводника в секундах
         public static int multiThreading; // сколько потоков использовать
+        public static int cacheTimeoutCleanupMinutes; // Время очистки кэша путей в минутах
+
 
         int tickTimeMs;
         private float elapsedMs = 0f;
@@ -103,8 +105,6 @@ namespace ElectricalProgressive
             base.Start(api);
 
             this.api = api;
-
-
         }
 
 
@@ -156,21 +156,25 @@ namespace ElectricalProgressive
 
 
 
-
+        /// <summary>
+        /// Загрузка конфигурации и начальная инициализация
+        /// </summary>
+        /// <param name="api"></param>
         public override void StartPre(ICoreAPI api)
         {
+            // грузим конфиг
+            // если конфиг с ошибкой или не найден, то генерируется стандартный
             config = api.LoadModConfig<ElectricityConfig>("ElectricityConfig.json") ?? new ElectricityConfig();
             api.StoreModConfig(config, "ElectricityConfig.json");
 
+            // проверяем, что конфиг валиден, и обрезаются значения
             speedOfElectricity = Math.Clamp(config.speedOfElectricity, 1, 16);
-
             timeBeforeBurnout = Math.Clamp(config.timeBeforeBurnout, 1, 600);
             multiThreading = Math.Clamp(config.multiThreading, 2, 32);
+            cacheTimeoutCleanupMinutes = Math.Clamp(config.cacheTimeoutCleanupMinutes, 1, 60);
 
-
+            // устанавливаем время между тиками
             tickTimeMs = 1000 / speedOfElectricity;
-
-
         }
 
 
@@ -892,21 +896,18 @@ namespace ElectricalProgressive
                 else
                 {
 
-                    currentPos = packet.path[curIndex];
-                    nextPos = packet.path[curIndex - 1];
-                    currentFacingFrom = packet.facingFrom[curIndex];
+                    currentPos = packet.path[curIndex];              // текущая позиция в пути пакета
+                    nextPos = packet.path[curIndex - 1];             // следующая позиция в пути пакета
+                    currentFacingFrom = packet.facingFrom[curIndex]; // текущая грань, с которой пришел пакет
 
                     if (parts.TryGetValue(nextPos, out nextPart!) &&
                         parts.TryGetValue(currentPos, out currentPart!))
                     {
-                        if (!nextPart.eparams[packet.facingFrom[curIndex - 1]]
-                                .burnout) //проверяем не сгорела ли грань в след блоке
+                        if (!nextPart.eparams[packet.facingFrom[curIndex - 1]].burnout &&  //проверяем не сгорела ли грань в след блоке
+                            !(currentPart.Networks[currentFacingFrom].version> packet.networkVersion))  // проверяем, что версия сети в текущей части не больше, чем в пакете
                         {
 
-                            if ((nextPart.Connection & packet.usedConnections[curIndex - 1]) ==
-                                packet.usedConnections
-                                    [curIndex - 1]) // проверяем совпадает ли путь в пакете с путем в части сети
-
+                            if ((nextPart.Connection & packet.usedConnections[curIndex - 1]) == packet.usedConnections[curIndex - 1]) // проверяем совпадает ли путь в пакете с путем в части сети
                             {
                                 // считаем сопротивление
                                 resistance = currentPart.eparams[currentFacingFrom].resistivity /
@@ -966,7 +967,6 @@ namespace ElectricalProgressive
                             {
                                 // если все же путь не совпадает с путем в пакете, то чистим кэши
                                 PathCacheManager.RemoveAll(packet.path[0], packet.path.Last(), packet.networkVersion);
-
                                 globalEnergyPackets[i].shouldBeRemoved = true;
 
                             }
@@ -974,7 +974,6 @@ namespace ElectricalProgressive
                         else
                         {
                             PathCacheManager.RemoveAll(packet.path[0], packet.path.Last(), packet.networkVersion);
-
                             globalEnergyPackets[i].shouldBeRemoved = true;
                         }
                     }
@@ -982,7 +981,6 @@ namespace ElectricalProgressive
                     {
                         // если все же части сети не найдены, то тут точно кэш надо утилизировать
                         PathCacheManager.RemoveAll(packet.path[0], packet.path.Last(), packet.networkVersion);
-
                         globalEnergyPackets[i].shouldBeRemoved = true;
                     }
                 }
@@ -1796,6 +1794,7 @@ namespace ElectricalProgressive
         public int speedOfElectricity = 4;
         public int timeBeforeBurnout = 30;
         public int multiThreading = 4;
+        public int cacheTimeoutCleanupMinutes = 2; 
     }
 
     /// <summary>

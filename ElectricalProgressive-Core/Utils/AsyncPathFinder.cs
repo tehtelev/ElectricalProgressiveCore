@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Vintagestory.API.Common;
@@ -25,11 +26,12 @@ namespace ElectricalProgressive.Utils
         /// </summary>
         /// <param name="parts"></param>
         /// <param name="maxConcurrentTasks"></param>
-        public AsyncPathFinder(Dictionary<BlockPos, NetworkPart> parts, int maxConcurrentTasks = 4)
+        public AsyncPathFinder(Dictionary<BlockPos, NetworkPart> parts, int maxConcurrentTasks)
         {
-            this.parts= parts;
+            this.parts = parts;
             this.maxConcurrentTasks = maxConcurrentTasks;
-            this.sizeOfQueue = 500* maxConcurrentTasks;
+            this.sizeOfQueue = 500 * maxConcurrentTasks;
+
             // Запускаем задачи-потребители один раз при старте
             for (int i = 0; i < maxConcurrentTasks; i++)
             {
@@ -74,25 +76,76 @@ namespace ElectricalProgressive.Utils
             while (isRunning)
             {
                 // Если очередь пуста, очищаем PathFinder и ждем
-                if (requestQueue.Count == 0) 
+                if (requestQueue.Count == 0)
                 {
                     pathFinder.Clear();
                     Thread.Sleep(100); // Если очередь пуста, ждем 100 мс
                 }
-                
+
                 // Пытаемся извлечь запрос из очереди
                 if (requestQueue.TryDequeue(out var request))
                 {
                     try //при изменении сетей неизбежно будет исключение, поэтому обрабатываем его здесь, чтобы не крашить. Особенно это касается загрузки и выгрузки мира
                     {
-                            var (path, facing, processed, usedConn) =
-                                pathFinder.FindShortestPath(request.Start, request.End, request.Network, parts);
+                        var (path, facing, processed, usedConn) =
+                            pathFinder.FindShortestPath(request.Start, request.End, request.Network, parts);
 
-                            if (path != null) // проверка на null, чтобы потом снова посчитать попробовать
-                                PathCacheManager.AddOrUpdate(
-                                    request.Start,
-                                    request.End,
-                                    request.Network.version, path, facing, processed, usedConn);
+
+                        if (path != null)
+                        {
+                            // проверка на null, чтобы потом снова посчитать попробовать
+                            // Глубокое копирование Start и End
+                            BlockPos copiedStart = request.Start.Copy();
+                            BlockPos copiedEnd = request.End.Copy();
+
+                            // Глубокое копирование массива path
+                            BlockPos[] copiedPath = null;
+
+                            copiedPath = new BlockPos[path.Length];
+                            for (int i = 0; i < path.Length; i++)
+                            {
+                                copiedPath[i] = path[i].Copy();
+                            }
+
+
+                            // Копирование массива facing
+                            int[] copiedFacing = null;
+
+                            copiedFacing = new int[facing.Length];
+                            Array.Copy(facing, copiedFacing, facing.Length);
+
+
+                            // Глубокое копирование двумерного массива processed
+                            bool[][] copiedProcessed = null;
+
+                            copiedProcessed = new bool[processed.Length][];
+                            for (int i = 0; i < processed.Length; i++)
+                            {
+                                copiedProcessed[i] = new bool[processed[i].Length];
+                                Array.Copy(processed[i], copiedProcessed[i], processed[i].Length);
+
+                            }
+
+
+                            // Копирование массива usedConn
+                            Facing[] copiedUsedConn = null;
+
+                            copiedUsedConn = new Facing[usedConn.Length];
+                            Array.Copy(usedConn, copiedUsedConn, usedConn.Length);
+
+
+                            // Добавление скопированных данных в кэш
+                            PathCacheManager.AddOrUpdate(
+                                copiedStart,
+                                copiedEnd,
+                                request.Network.version,
+                                copiedPath,
+                                copiedFacing,
+                                copiedProcessed,
+                                copiedUsedConn);
+                        }
+
+
 
                     }
                     catch
