@@ -471,8 +471,11 @@ namespace ElectricalProgressive
         private void OnGameTickServer(float deltaTime)
         {
 
+            if (sapi == null) // выходим полюбому, если нет API
+                return;
+
             //Очищаем старые пути
-            if (api?.World.Rand.NextDouble() < 0.1d)
+            if (sapi?.World.Rand.NextDouble() < 0.1d)
             {
                 PathCacheManager.Cleanup();
             }
@@ -1037,7 +1040,7 @@ namespace ElectricalProgressive
 
 
 
-            var bAccessor = api.World.BlockAccessor; // аксессор для блоков
+            var bAccessor = sapi.World.BlockAccessor; // аксессор для блоков
             BlockPos partPos;                        // Временная переменная для позиции части сети
             NetworkPart part;                        // Временная переменная для части сети
             bool updated;                            // Флаг обновления части сети от повреждения

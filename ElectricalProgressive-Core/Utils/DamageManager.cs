@@ -35,19 +35,19 @@ namespace ElectricalProgressive.Utils
 
         public static global::ElectricalProgressive.ElectricalProgressive? System;
 
-        private ICoreAPI api;
+        private ICoreServerAPI sapi;
 
 
         /// <summary>
         /// Конструктор класса
         /// </summary>
         /// <param name="api"></param>
-        public DamageManager(ICoreAPI api)
+        public DamageManager(ICoreServerAPI api)
         {
-            this.api = api;
+            this.sapi = api;
 
             // Получаем ссылку на систему ElectricalProgressive, если она есть
-            System = api?.ModLoader.GetModSystem<global::ElectricalProgressive.ElectricalProgressive>();
+            System = sapi?.ModLoader.GetModSystem<global::ElectricalProgressive.ElectricalProgressive>();
         }
 
 
@@ -253,7 +253,7 @@ namespace ElectricalProgressive.Utils
         public bool DamageByEnvironment(ICoreServerAPI sapi, ref NetworkPart part, ref IBlockAccessor blockAccessor)
         {
             //без api тут точно нечего делать
-            if (api == null)
+            if (sapi == null)
                 return false;
 
 
