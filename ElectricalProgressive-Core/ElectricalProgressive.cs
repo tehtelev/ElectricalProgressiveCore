@@ -22,7 +22,7 @@ using System.IO;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Electrical logic library.",
-    Version = "2.0.0-rc.1",
+    Version = "2.0.0-rc.3",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
 
@@ -907,6 +907,7 @@ namespace ElectricalProgressive
                         parts.TryGetValue(currentPos, out currentPart!))
                     {
                         if (!nextPart.eparams[packet.facingFrom[curIndex - 1]].burnout &&  //проверяем не сгорела ли грань в след блоке
+                            currentPart.Networks[currentFacingFrom]!=null && // проверяем, что сеть в текущей части не null
                             !(currentPart.Networks[currentFacingFrom].version> packet.networkVersion))  // проверяем, что версия сети в текущей части не больше, чем в пакете
                         {
 
