@@ -22,7 +22,7 @@ using System.IO;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Electrical logic library.",
-    Version = "2.0.0-rc.3",
+    Version = "2.0.0-rc.4",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
 
@@ -86,7 +86,7 @@ namespace ElectricalProgressive
         public static int cacheTimeoutCleanupMinutes; // Время очистки кэша путей в минутах
 
 
-        int tickTimeMs;
+        public int tickTimeMs;
         private float elapsedMs = 0f;
 
         int envUpdater = 0;
