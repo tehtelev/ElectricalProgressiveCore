@@ -196,7 +196,11 @@ public class PathFinder
 
                     facingFrom[state] = buf2[i];
 
-                    nowProcessedFaces[state] = buf3;
+                    // тут только копировать
+                    var buf3copy=new bool[6];
+                    Array.Copy(buf3, buf3copy, 6);
+                    nowProcessedFaces.Add(state, buf3copy);
+
                 }
 
                 i++;
