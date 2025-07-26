@@ -282,11 +282,7 @@ public class PathFinder
 
         nowProcessingFaces[pathLength - 1] = facing;
 
-
-
-
-
-
+        
 
         return (path, facingFromList, nowProcessedFacesList, nowProcessingFaces);
     }

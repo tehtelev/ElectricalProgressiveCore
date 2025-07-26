@@ -22,7 +22,7 @@ using System.IO;
     "electricalprogressivecore",
     Website = "https://github.com/tehtelev/ElectricalProgressiveCore",
     Description = "Electrical logic library.",
-    Version = "2.0.0-rc.4",
+    Version = "2.0.0",
     Authors = new[] { "Tehtelev", "Kotl" }
 )]
 
